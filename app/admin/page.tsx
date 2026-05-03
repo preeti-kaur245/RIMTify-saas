@@ -102,6 +102,28 @@ const AdminDashboard = () => {
     setProcessing(false); setShowImportModal(false); setCsvData(''); fetchData();
   }
 
+  const handleAddCourse = async () => {
+    await supabase.from('courses').insert([courseForm]);
+    setShowCourseModal(false); fetchData();
+  }
+  const handleAddFee = async () => {
+    await supabase.from('fees').insert([{ ...feeForm, status: 'pending' }]);
+    setShowFeeModal(false); fetchData();
+  }
+  const handleAddBook = async () => {
+    await supabase.from('books').insert([bookForm]);
+    setShowBookModal(false); fetchData();
+  }
+  const handleAddAnnounce = async () => {
+    await supabase.from('announcements').insert([announceForm]);
+    setShowAnnounceModal(false); fetchData();
+  }
+  const handleAddPayroll = async () => {
+    const net = parseFloat(payrollForm.base_salary) + parseFloat(payrollForm.bonus) - parseFloat(payrollForm.deductions);
+    await supabase.from('payroll').insert([{ ...payrollForm, net_salary: net, status: 'pending' }]);
+    setShowPayrollModal(false); fetchData();
+  }
+
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); }
   const handleMarkFeePaid = async (id: any) => { await supabase.from('fees').update({ status: 'paid', payment_date: new Date().toISOString() }).eq('id', id); fetchData(); }
   const handleDelete = async (table: string, id: any) => { if(confirm('Delete record?')) { await supabase.from(table).delete().eq('id', id); fetchData(); } }
@@ -254,10 +276,138 @@ const AdminDashboard = () => {
               </div>
             </motion.div>
           )}
+
+          {activeTab === 'library' && (
+            <motion.div key="library" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <button onClick={() => { setBookForm({ title: '', author: '', isbn: '', category: 'CS', total_copies: 1 }); setShowBookModal(true); }} className="btn-primary" style={{ marginBottom: '24px' }}><Plus size={18} /> Add Book</button>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+                {books.map(b => (
+                  <div key={b.id} className="glass-card" style={{ padding: '24px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><h3>{b.title}</h3><button onClick={() => handleDelete('books', b.id)}><Trash2 size={16} color="var(--error)" /></button></div>
+                    <p style={{ color: 'var(--text-muted)' }}>{b.author}</p>
+                    <p style={{ color: 'var(--accent-cyan)', fontWeight: '700', marginTop: '8px' }}>{b.total_copies} copies</p>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'announce' && (
+            <motion.div key="announce" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <button onClick={() => { setAnnounceForm({ title: '', message: '', type: 'general', target_role: 'all' }); setShowAnnounceModal(true); }} className="btn-primary" style={{ marginBottom: '24px' }}><Plus size={18} /> New Announcement</button>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                {announcements.map(a => (
+                  <div key={a.id} className="glass-card" style={{ padding: '24px', borderLeft: `4px solid ${a.type === 'urgent' ? 'var(--error)' : 'var(--accent-cyan)'}` }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                      <h3>{a.title}</h3>
+                      <button onClick={() => handleDelete('announcements', a.id)}><Trash2 size={16} color="var(--error)" /></button>
+                    </div>
+                    <p style={{ color: 'var(--text-secondary)', marginTop: '8px' }}>{a.message}</p>
+                    <span style={{ fontSize: '11px', color: 'var(--text-muted)', marginTop: '12px', display: 'block' }}>Target: {a.target_role.toUpperCase()}</span>
+                  </div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'payroll' && (
+            <motion.div key="payroll" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <button onClick={() => { setPayrollForm({ teacher_id: '', month: 'May', year: 2026, base_salary: '', bonus: '0', deductions: '0' }); setShowPayrollModal(true); }} className="btn-primary" style={{ marginBottom: '24px' }}><Plus size={18} /> Add Payroll Record</button>
+              <div className="glass-card">
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead><tr style={{ textAlign: 'left', borderBottom: '1px solid var(--glass-border)' }}><th style={{ padding: '16px 24px' }}>Teacher</th><th style={{ padding: '16px 24px' }}>Month/Year</th><th style={{ padding: '16px 24px' }}>Net Salary</th><th style={{ padding: '16px 24px' }}>Status</th></tr></thead>
+                  <tbody>
+                    {payrolls.map(p => (
+                      <tr key={p.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                        <td style={{ padding: '16px 24px' }}>{p.profiles?.name}</td>
+                        <td style={{ padding: '16px 24px' }}>{p.month} {p.year}</td>
+                        <td style={{ padding: '16px 24px' }}>${p.net_salary}</td>
+                        <td style={{ padding: '16px 24px' }}><span style={{ color: p.status === 'paid' ? 'var(--success)' : 'var(--error)' }}>{p.status.toUpperCase()}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </motion.div>
+          )}
         </AnimatePresence>
       </main>
 
-      {/* Modals same as before ... */}
+      {/* Modals */}
+      {showCourseModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}><h3>Add Course</h3><button onClick={() => setShowCourseModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button></div>
+            <input className="input-field" placeholder="Course Name" value={courseForm.name} onChange={e => setCourseForm({...courseForm, name: e.target.value})} style={{ marginBottom: '16px' }} />
+            <input className="input-field" placeholder="Course Code" value={courseForm.code} onChange={e => setCourseForm({...courseForm, code: e.target.value})} style={{ marginBottom: '16px' }} />
+            <button onClick={handleAddCourse} className="btn-primary" style={{ width: '100%' }}>Save Course</button>
+          </motion.div>
+        </div>
+      )}
+
+      {showFeeModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}><h3>Assign Fee</h3><button onClick={() => setShowFeeModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button></div>
+            <select className="input-field" value={feeForm.student_id} onChange={e => setFeeForm({...feeForm, student_id: e.target.value})} style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }}>
+              <option value="" disabled style={{background: '#1a1a1a'}}>Select Student</option>
+              {users.filter(u => u.role === 'student').map(u => <option key={u.id} value={u.id} style={{background: '#1a1a1a'}}>{u.name}</option>)}
+            </select>
+            <input className="input-field" placeholder="Fee Title (e.g. Tuition)" value={feeForm.title} onChange={e => setFeeForm({...feeForm, title: e.target.value})} style={{ marginBottom: '16px' }} />
+            <input type="number" className="input-field" placeholder="Amount" value={feeForm.amount} onChange={e => setFeeForm({...feeForm, amount: e.target.value})} style={{ marginBottom: '16px' }} />
+            <input type="date" className="input-field" value={feeForm.due_date} onChange={e => setFeeForm({...feeForm, due_date: e.target.value})} style={{ marginBottom: '16px' }} />
+            <button onClick={handleAddFee} className="btn-primary" style={{ width: '100%' }}>Assign Fee</button>
+          </motion.div>
+        </div>
+      )}
+
+      {showBookModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}><h3>Add Book</h3><button onClick={() => setShowBookModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button></div>
+            <input className="input-field" placeholder="Book Title" value={bookForm.title} onChange={e => setBookForm({...bookForm, title: e.target.value})} style={{ marginBottom: '16px' }} />
+            <input className="input-field" placeholder="Author" value={bookForm.author} onChange={e => setBookForm({...bookForm, author: e.target.value})} style={{ marginBottom: '16px' }} />
+            <input type="number" className="input-field" placeholder="Total Copies" value={bookForm.total_copies} onChange={e => setBookForm({...bookForm, total_copies: parseInt(e.target.value)})} style={{ marginBottom: '16px' }} />
+            <button onClick={handleAddBook} className="btn-primary" style={{ width: '100%' }}>Save Book</button>
+          </motion.div>
+        </div>
+      )}
+
+      {showAnnounceModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}><h3>New Announcement</h3><button onClick={() => setShowAnnounceModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button></div>
+            <input className="input-field" placeholder="Title" value={announceForm.title} onChange={e => setAnnounceForm({...announceForm, title: e.target.value})} style={{ marginBottom: '16px' }} />
+            <textarea className="input-field" placeholder="Message" value={announceForm.message} onChange={e => setAnnounceForm({...announceForm, message: e.target.value})} style={{ marginBottom: '16px', minHeight: '80px' }} />
+            <select className="input-field" value={announceForm.type} onChange={e => setAnnounceForm({...announceForm, type: e.target.value})} style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }}>
+              <option value="general" style={{background: '#1a1a1a'}}>General</option>
+              <option value="urgent" style={{background: '#1a1a1a'}}>Urgent</option>
+              <option value="event" style={{background: '#1a1a1a'}}>Event</option>
+            </select>
+            <select className="input-field" value={announceForm.target_role} onChange={e => setAnnounceForm({...announceForm, target_role: e.target.value})} style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }}>
+              <option value="all" style={{background: '#1a1a1a'}}>All Users</option>
+              <option value="student" style={{background: '#1a1a1a'}}>Students Only</option>
+              <option value="teacher" style={{background: '#1a1a1a'}}>Teachers Only</option>
+            </select>
+            <button onClick={handleAddAnnounce} className="btn-primary" style={{ width: '100%' }}>Broadcast</button>
+          </motion.div>
+        </div>
+      )}
+
+      {showPayrollModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}><h3>Add Payroll</h3><button onClick={() => setShowPayrollModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button></div>
+            <select className="input-field" value={payrollForm.teacher_id} onChange={e => setPayrollForm({...payrollForm, teacher_id: e.target.value})} style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }}>
+              <option value="" disabled style={{background: '#1a1a1a'}}>Select Teacher</option>
+              {users.filter(u => u.role === 'teacher').map(u => <option key={u.id} value={u.id} style={{background: '#1a1a1a'}}>{u.name}</option>)}
+            </select>
+            <input type="number" className="input-field" placeholder="Base Salary" value={payrollForm.base_salary} onChange={e => setPayrollForm({...payrollForm, base_salary: e.target.value})} style={{ marginBottom: '16px' }} />
+            <input type="number" className="input-field" placeholder="Bonus" value={payrollForm.bonus} onChange={e => setPayrollForm({...payrollForm, bonus: e.target.value})} style={{ marginBottom: '16px' }} />
+            <button onClick={handleAddPayroll} className="btn-primary" style={{ width: '100%' }}>Save Record</button>
+          </motion.div>
+        </div>
+      )}
       {showImportModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
           <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '600px', padding: '32px' }}>
