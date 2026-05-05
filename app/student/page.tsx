@@ -15,6 +15,7 @@ const StudentDashboard = () => {
   const [fees, setFees] = useState<any[]>([])
   const [loans, setLoans] = useState<any[]>([])
   const [materials, setMaterials] = useState<any[]>([])
+  const [announcements, setAnnouncements] = useState<any[]>([])
   const [absentToday, setAbsentToday] = useState(false)
   const [attendancePercentage, setAttendancePercentage] = useState(0)
   const [studentProfile, setStudentProfile] = useState<any>(null)
@@ -51,6 +52,10 @@ const StudentDashboard = () => {
     // Fetch Materials
     const { data: m } = await supabase.from('materials').select('*').order('created_at', { ascending: false })
     if (m) setMaterials(m)
+
+    // Fetch Announcements
+    const { data: a } = await supabase.from('announcements').select('*').in('target_role', ['all', 'student']).order('created_at', { ascending: false })
+    if (a) setAnnouncements(a)
 
     // Check attendance for today
     const today = new Date().toISOString().split('T')[0]
@@ -197,6 +202,29 @@ const StudentDashboard = () => {
                    </div>
                  ))}
                  {materials.length === 0 && <div className="glass-card" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)', gridColumn: '1/-1' }}>No course materials available.</div>}
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'profile' && (
+            <motion.div key="profile" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
+              <div className="glass-card" style={{ padding: '40px', textAlign: 'center' }}>
+                <div style={{ width: '100px', height: '100px', borderRadius: '50%', background: 'rgba(255,255,255,0.05)', border: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', fontSize: '40px' }}>
+                  {studentProfile?.name?.charAt(0)}
+                </div>
+                <h2>{studentProfile?.name}</h2>
+                <p style={{ color: 'var(--accent-cyan)', fontWeight: '600', marginTop: '4px' }}>{studentProfile?.roll_no}</p>
+                
+                <div style={{ marginTop: '40px', display: 'grid', gap: '16px', textAlign: 'left' }}>
+                  <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>DEPARTMENT</p>
+                    <p style={{ fontWeight: '600' }}>{studentProfile?.department || 'Not Assigned'}</p>
+                  </div>
+                  <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                    <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>ROLE</p>
+                    <p style={{ fontWeight: '600' }}>{studentProfile?.role?.toUpperCase()}</p>
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}

@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-const isProd = process.env.NODE_ENV === 'production' || process.env.GITHUB_ACTIONS === 'true';
+const isProd = process.env.NODE_ENV === 'production';
 
 const nextConfig = {
   output: 'export',
@@ -7,7 +7,6 @@ const nextConfig = {
     unoptimized: true,
   },
   basePath: isProd ? '/RIMTify-saas' : '',
-  assetPrefix: isProd ? '/RIMTify-saas/' : '',
   trailingSlash: true,
 };
 

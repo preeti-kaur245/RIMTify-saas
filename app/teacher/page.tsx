@@ -85,7 +85,7 @@ const TeacherDashboard = () => {
   }
 
   const fetchStudents = async () => {
-    const { data } = await supabase.from('students').select('*').order('roll_no', { ascending: true })
+    const { data } = await supabase.from('profiles').select('*').eq('role', 'student').order('roll_no', { ascending: true })
     if (data) {
       setStudents(data)
       const initialAttendance: Record<string, any> = {}
@@ -136,6 +136,38 @@ const TeacherDashboard = () => {
     }])
     setMaterialForm({ title: '', file_url: '', file_type: 'pdf' })
     fetchMaterials()
+  }
+
+  const handleSaveGrades = async () => {
+    setSaving(true)
+    const { data: user } = await supabase.auth.getUser()
+    if (!user?.user || !selectedCourse) return
+
+    const records = Object.entries(gradeRecords).map(([studentId, data]) => ({
+      student_id: studentId,
+      course_id: selectedCourse.id,
+      teacher_id: user.user.id,
+      exam_type: examType,
+      marks: parseFloat(data.marks),
+      remarks: data.remarks
+    }))
+
+    if (records.length === 0) {
+      setSaving(false)
+      return
+    }
+
+    const { error } = await supabase.from('grades').upsert(records, { 
+      onConflict: 'student_id,course_id,exam_type' 
+    })
+
+    if (error) {
+      setMessage({ text: 'Error saving grades: ' + error.message, type: 'error' })
+    } else {
+      setMessage({ text: 'Grades saved successfully!', type: 'success' })
+    }
+    setSaving(false)
+    setTimeout(() => setMessage({ text: '', type: '' }), 3000)
   }
 
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); }
@@ -233,7 +265,7 @@ const TeacherDashboard = () => {
                      <tbody>
                         {students.map(s => (
                            <tr key={s.id} style={{ borderTop: '1px solid var(--glass-border)' }}>
-                              <td style={{ padding: '16px 24px' }}><p style={{ fontWeight: '600' }}>{s.full_name}</p><p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{s.roll_no}</p></td>
+                              <td style={{ padding: '16px 24px' }}><p style={{ fontWeight: '600' }}>{s.name}</p><p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{s.roll_no}</p></td>
                               <td style={{ padding: '16px 24px', textAlign: 'center' }}>
                                  <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.05)', borderRadius: '50px', padding: '4px' }}>
                                     <button onClick={() => setAttendanceRecords({...attendanceRecords, [s.id]: 'present'})} style={{ padding: '6px 16px', borderRadius: '50px', border: 'none', background: attendanceRecords[s.id] === 'present' ? 'var(--success)' : 'transparent', color: attendanceRecords[s.id] === 'present' ? 'white' : 'var(--text-muted)', cursor: 'pointer', transition: '0.2s', fontSize: '12px', fontWeight: '600' }}>PRESENT</button>
@@ -372,7 +404,7 @@ const TeacherDashboard = () => {
                       <tbody>
                          {students.length > 0 ? students.map(s => (
                             <tr key={s.id} style={{ borderTop: '1px solid var(--glass-border)' }}>
-                               <td style={{ padding: '16px 24px' }}><div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><div style={{ width: '32px', height: '32px', background: 'var(--accent-purple)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>{s.full_name?.charAt(0)}</div> {s.full_name}</div></td>
+                               <td style={{ padding: '16px 24px' }}><div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><div style={{ width: '32px', height: '32px', background: 'var(--accent-purple)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>{s.name?.charAt(0)}</div> {s.name}</div></td>
                                <td style={{ padding: '16px 24px', color: 'var(--text-secondary)' }}>{s.roll_no}</td>
                                <td style={{ padding: '16px 24px', textAlign: 'right' }}><button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }}>Profile</button></td>
                             </tr>
@@ -395,7 +427,7 @@ const TeacherDashboard = () => {
                          <option value="midterm">Midterm</option>
                          <option value="final">Final Exam</option>
                       </select>
-                      <button className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Save size={18} /> Save All</button>
+                      <button className="btn-primary" onClick={handleSaveGrades} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>{saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Save All</button>
                    </div>
                 </div>
                 <div className="glass-card" style={{ overflow: 'hidden' }}>
@@ -411,7 +443,7 @@ const TeacherDashboard = () => {
                          {students.map(s => (
                             <tr key={s.id} style={{ borderTop: '1px solid var(--glass-border)' }}>
                                <td style={{ padding: '16px 24px' }}>
-                                  <p style={{ fontWeight: '600' }}>{s.full_name}</p>
+                                  <p style={{ fontWeight: '600' }}>{s.name}</p>
                                   <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{s.roll_no}</p>
                                </td>
                                <td style={{ padding: '16px 24px' }}>
