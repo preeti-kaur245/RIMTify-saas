@@ -1,17 +1,14 @@
 /** @type {import('next').NextConfig} */
-const isGithubActions = process.env.GITHUB_ACTIONS || false;
+const isProd = process.env.NODE_ENV === 'production' || process.env.GITHUB_ACTIONS === 'true';
 
 const nextConfig = {
   output: 'export',
-  trailingSlash: true,
   images: {
     unoptimized: true,
   },
+  basePath: isProd ? '/RIMTify-saas' : '',
+  assetPrefix: isProd ? '/RIMTify-saas/' : '',
+  trailingSlash: true,
 };
-
-if (isGithubActions) {
-  nextConfig.basePath = '/RIMTify-saas';
-  nextConfig.assetPrefix = '/RIMTify-saas/';
-}
 
 export default nextConfig;
