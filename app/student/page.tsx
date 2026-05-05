@@ -70,7 +70,7 @@ const StudentDashboard = () => {
     setLoading(false)
   }
 
-  const handleLogout = async () => { await supabase.auth.signOut(); window.location.href = '/RIMTify-saas/login/'; }
+  const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', paddingBottom: '100px' }}>

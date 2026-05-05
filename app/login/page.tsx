@@ -41,8 +41,8 @@ const Login = () => {
           .eq('id', data.user.id)
           .single()
         
-        if (profile) window.location.href = `/RIMTify-saas/${profile.role}/`
-        else window.location.href = '/RIMTify-saas/'
+        if (profile) router.push(`/${profile.role}`)
+        else router.push('/')
       }
     } else {
       const { data, error } = await supabase.auth.signUp({
