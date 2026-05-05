@@ -85,7 +85,7 @@ const TeacherDashboard = () => {
   }
 
   const fetchStudents = async () => {
-    const { data } = await supabase.from('students').select('*').order('roll_no', { ascending: true })
+    const { data } = await supabase.from('profiles').select('*').eq('role', 'student').order('roll_no', { ascending: true })
     if (data) {
       setStudents(data)
       const initialAttendance: Record<string, any> = {}
@@ -138,7 +138,7 @@ const TeacherDashboard = () => {
     fetchMaterials()
   }
 
-  const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); }
+  const handleLogout = async () => { await supabase.auth.signOut(); window.location.href = '/RIMTify-saas/login/'; }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex' }}>
@@ -233,7 +233,7 @@ const TeacherDashboard = () => {
                      <tbody>
                         {students.map(s => (
                            <tr key={s.id} style={{ borderTop: '1px solid var(--glass-border)' }}>
-                              <td style={{ padding: '16px 24px' }}><p style={{ fontWeight: '600' }}>{s.full_name}</p><p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{s.roll_no}</p></td>
+                              <td style={{ padding: '16px 24px' }}><p style={{ fontWeight: '600' }}>{s.name}</p><p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{s.roll_no}</p></td>
                               <td style={{ padding: '16px 24px', textAlign: 'center' }}>
                                  <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.05)', borderRadius: '50px', padding: '4px' }}>
                                     <button onClick={() => setAttendanceRecords({...attendanceRecords, [s.id]: 'present'})} style={{ padding: '6px 16px', borderRadius: '50px', border: 'none', background: attendanceRecords[s.id] === 'present' ? 'var(--success)' : 'transparent', color: attendanceRecords[s.id] === 'present' ? 'white' : 'var(--text-muted)', cursor: 'pointer', transition: '0.2s', fontSize: '12px', fontWeight: '600' }}>PRESENT</button>
@@ -372,7 +372,7 @@ const TeacherDashboard = () => {
                       <tbody>
                          {students.length > 0 ? students.map(s => (
                             <tr key={s.id} style={{ borderTop: '1px solid var(--glass-border)' }}>
-                               <td style={{ padding: '16px 24px' }}><div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><div style={{ width: '32px', height: '32px', background: 'var(--accent-purple)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>{s.full_name?.charAt(0)}</div> {s.full_name}</div></td>
+                               <td style={{ padding: '16px 24px' }}><div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><div style={{ width: '32px', height: '32px', background: 'var(--accent-purple)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>{s.name?.charAt(0)}</div> {s.name}</div></td>
                                <td style={{ padding: '16px 24px', color: 'var(--text-secondary)' }}>{s.roll_no}</td>
                                <td style={{ padding: '16px 24px', textAlign: 'right' }}><button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }}>Profile</button></td>
                             </tr>
@@ -411,7 +411,7 @@ const TeacherDashboard = () => {
                          {students.map(s => (
                             <tr key={s.id} style={{ borderTop: '1px solid var(--glass-border)' }}>
                                <td style={{ padding: '16px 24px' }}>
-                                  <p style={{ fontWeight: '600' }}>{s.full_name}</p>
+                                  <p style={{ fontWeight: '600' }}>{s.name}</p>
                                   <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{s.roll_no}</p>
                                </td>
                                <td style={{ padding: '16px 24px' }}>

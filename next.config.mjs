@@ -2,6 +2,7 @@
 const nextConfig = {
   output: 'export',
   basePath: '/RIMTify-saas',
+  trailingSlash: true,
   images: {
     unoptimized: true,
   },

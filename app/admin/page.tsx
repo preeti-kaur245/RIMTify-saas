@@ -124,7 +124,7 @@ const AdminDashboard = () => {
     setShowPayrollModal(false); fetchData();
   }
 
-  const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); }
+  const handleLogout = async () => { await supabase.auth.signOut(); window.location.href = '/RIMTify-saas/login/'; }
   const handleMarkFeePaid = async (id: any) => { await supabase.from('fees').update({ status: 'paid', payment_date: new Date().toISOString() }).eq('id', id); fetchData(); }
   const handleDelete = async (table: string, id: any) => { if(confirm('Delete record?')) { await supabase.from(table).delete().eq('id', id); fetchData(); } }
 
