@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   CheckCircle, XCircle, Calendar, BookOpen, LogOut, 
   Search, Filter, History, Users, Save, Check, AlertCircle, 
-  ChevronRight, Clock, Edit2, FileText, Upload, Plus, X, Link as LinkIcon, Loader2, Trash2, Book, Trophy, DollarSign, Megaphone, Menu
+  ChevronRight, Clock, Edit2, FileText, Upload, Plus, X, Link as LinkIcon, Loader2, Trash2, Book, Trophy, DollarSign, Megaphone, Menu, Activity, UserCheck, UserX, BarChart, ChevronDown, Sparkles
 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -38,6 +38,8 @@ const TeacherDashboard = () => {
   const [message, setMessage] = useState({ text: '', type: '' })
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
+  const [filterStatus, setFilterStatus] = useState('all') // 'all', 'present', 'absent', 'late'
+  const [isSearchFocused, setIsSearchFocused] = useState(false)
 
   const router = useRouter()
   const supabase = createClient()
@@ -108,11 +110,15 @@ const TeacherDashboard = () => {
   }
 
   const filteredStudents = useMemo(() => {
-    return students.filter(s => 
+    let result = students.filter(s => 
       s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
       s.roll_no.toLowerCase().includes(searchTerm.toLowerCase())
     )
-  }, [students, searchTerm])
+    if (filterStatus !== 'all') {
+      result = result.filter(s => attendanceRecords[s.id] === filterStatus)
+    }
+    return result
+  }, [students, searchTerm, filterStatus, attendanceRecords])
 
   const markAllPresent = () => {
     const newRecords = { ...attendanceRecords }
@@ -319,175 +325,206 @@ const TeacherDashboard = () => {
             <div key="content">
           {activeTab === 'attendance' && (
              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                <h1 style={{ marginBottom: '24px' }}>Welcome, {teacherProfile?.name || 'Prof.'}</h1>
-                <div className="glass-card" style={{ padding: '24px', borderLeft: '4px solid var(--accent-purple)', marginBottom: '32px' }}>
-                  <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginBottom: '16px' }}><Megaphone size={20} color="var(--accent-purple)" /> <h3 style={{ fontSize: '18px' }}>Latest Announcement</h3></div>
-                  {announcements.length > 0 ? (
-                    <div>
-                      <p style={{ fontWeight: '600', marginBottom: '4px' }}>{announcements[0].title}</p>
-                      <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>{announcements[0].message}</p>
+                {/* Premium Sticky Top Header (Desktop & Mobile combined feel) */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', paddingBottom: '16px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div>
+                    <h1 style={{ fontSize: '28px', background: 'linear-gradient(to right, #FFFFFF, #A0A0A0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Welcome, {teacherProfile?.name || 'Prof.'}</h1>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '8px' }}>
+                      <div className="status-dot-active" />
+                      <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Class Active • {selectedDate} (Session {selectedSession})</span>
                     </div>
-                  ) : <p style={{ color: 'var(--text-muted)' }}>No recent announcements.</p>}
+                  </div>
+                  <div style={{ display: 'flex', gap: '12px' }}>
+                     {/* Controls moved to a sleek inline bar */}
+                     <select className="input-field" value={selectedCourse?.id} onChange={(e) => setSelectedCourse(courses.find(c => c.id === e.target.value))} style={{ background: 'rgba(255,255,255,0.05)', color: 'white', width: 'auto', padding: '8px 16px', borderRadius: '100px' }}>
+                        {courses.map(c => <option key={c.id} value={c.id} style={{background: '#1a1a1a'}}>{c.name}</option>)}
+                     </select>
+                     <input type="date" className="input-field desktop-only" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} style={{ width: 'auto', padding: '8px 16px', borderRadius: '100px' }} />
+                     <select className="input-field desktop-only" value={selectedSession} onChange={(e) => setSelectedSession(Number(e.target.value))} style={{ width: 'auto', padding: '8px 16px', borderRadius: '100px' }}>
+                        {[1,2,3,4,5,6,7,8].map(s => <option key={s} value={s} style={{background: '#1a1a1a'}}>Session {s}</option>)}
+                     </select>
+                  </div>
                 </div>
+
                 {message.text && (
-                  <div style={{ padding: '12px 16px', background: message.type === 'error' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(34, 197, 94, 0.1)', borderLeft: `4px solid ${message.type === 'error' ? 'var(--error)' : 'var(--success)'}`, marginBottom: '24px', borderRadius: '4px', color: message.type === 'error' ? 'var(--error)' : 'var(--success)' }}>
-                    {message.text}
+                  <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} style={{ padding: '12px 16px', background: message.type === 'error' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)', borderLeft: `4px solid ${message.type === 'error' ? 'var(--error)' : 'var(--success)'}`, marginBottom: '24px', borderRadius: '8px', color: message.type === 'error' ? 'var(--error)' : 'var(--success)', display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <Sparkles size={18} /> {message.text}
+                  </motion.div>
+                )}
+                {/* Advanced Analytics Grid */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '32px' }}>
+                  <motion.div whileHover={{ scale: 1.02 }} className="glass-card" style={{ padding: '20px', position: 'relative', overflow: 'hidden' }}>
+                    <div style={{ position: 'absolute', right: '-10px', top: '-10px', opacity: 0.1 }}><Users size={80} color="var(--accent-cyan)" /></div>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '8px', fontWeight: '600' }}>TOTAL STUDENTS</p>
+                    <h2 style={{ fontSize: '32px', color: 'white' }}>{students.length}</h2>
+                  </motion.div>
+                  
+                  <motion.div whileHover={{ scale: 1.02 }} className="glass-card neon-glow-green" style={{ padding: '20px', position: 'relative', overflow: 'hidden' }}>
+                    <div style={{ position: 'absolute', right: '-10px', top: '-10px', opacity: 0.1 }}><UserCheck size={80} color="var(--success)" /></div>
+                    <p style={{ color: 'var(--success)', fontSize: '13px', marginBottom: '8px', fontWeight: '600' }}>PRESENT TODAY</p>
+                    <h2 style={{ fontSize: '32px', color: 'white' }}>{Object.values(attendanceRecords).filter(v => v === 'present').length}</h2>
+                  </motion.div>
+
+                  <motion.div whileHover={{ scale: 1.02 }} className="glass-card neon-glow-red" style={{ padding: '20px', position: 'relative', overflow: 'hidden' }}>
+                    <div style={{ position: 'absolute', right: '-10px', top: '-10px', opacity: 0.1 }}><UserX size={80} color="var(--error)" /></div>
+                    <p style={{ color: 'var(--error)', fontSize: '13px', marginBottom: '8px', fontWeight: '600' }}>ABSENT TODAY</p>
+                    <h2 style={{ fontSize: '32px', color: 'white' }}>{Object.values(attendanceRecords).filter(v => v === 'absent').length}</h2>
+                  </motion.div>
+
+                  <motion.div whileHover={{ scale: 1.02 }} className="glass-card" style={{ padding: '20px', position: 'relative', overflow: 'hidden' }}>
+                    <div style={{ position: 'absolute', right: '-10px', top: '-10px', opacity: 0.1 }}><Activity size={80} color="var(--accent-purple)" /></div>
+                    <p style={{ color: 'var(--accent-purple)', fontSize: '13px', marginBottom: '8px', fontWeight: '600' }}>TODAY'S RATE</p>
+                    <h2 style={{ fontSize: '32px', color: 'white' }}>{students.length > 0 ? Math.round((Object.values(attendanceRecords).filter(v => v === 'present').length / students.length) * 100) : 0}%</h2>
+                  </motion.div>
+                  
+                  <motion.div whileHover={{ scale: 1.02 }} className="glass-card" style={{ padding: '20px' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '8px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}><Trophy size={14} color="var(--accent-cyan)" /> HIGHEST OVERALL</p>
+                    {courseStats.highest.length > 0 ? (
+                      <div>
+                        <h3 style={{ fontSize: '18px' }}>{courseStats.highest[0].name}</h3>
+                        <p style={{ color: 'var(--accent-cyan)', fontWeight: '700' }}>{courseStats.highest[0].percentage}%</p>
+                      </div>
+                    ) : <p style={{ color: 'var(--text-muted)' }}>No data</p>}
+                  </motion.div>
+
+                  <motion.div whileHover={{ scale: 1.02 }} className="glass-card" style={{ padding: '20px' }}>
+                    <p style={{ color: 'var(--text-muted)', fontSize: '13px', marginBottom: '8px', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '6px' }}><AlertCircle size={14} color="var(--error)" /> LOWEST OVERALL</p>
+                    {courseStats.lowest.length > 0 ? (
+                      <div>
+                        <h3 style={{ fontSize: '18px' }}>{courseStats.lowest[0].name}</h3>
+                        <p style={{ color: 'var(--error)', fontWeight: '700' }}>{courseStats.lowest[0].percentage}%</p>
+                      </div>
+                    ) : <p style={{ color: 'var(--text-muted)' }}>No data</p>}
+                  </motion.div>
+                </div>
+
+                {courseStats.all.length > 0 && (
+                  <div className="glass-card" style={{ padding: '24px', marginBottom: '32px' }}>
+                    <h3 style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                       <BarChart size={20} color="var(--accent-purple)" /> Class Distribution Overview
+                    </h3>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '16px', maxHeight: '300px', overflowY: 'auto' }} className="scroll-hide">
+                      {courseStats.all.map((s, i) => (
+                         <div key={i} style={{ display: 'flex', flexDirection: 'column', gap: '8px', background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                               <span style={{ fontSize: '14px', fontWeight: '600', cursor: 'pointer' }} onClick={() => openStudentProfile(s)}>{s.name}</span>
+                               <span style={{ fontSize: '14px', fontWeight: '800', color: s.percentage >= 75 ? 'var(--success)' : s.percentage >= 50 ? 'var(--accent-cyan)' : 'var(--error)' }}>{s.percentage}%</span>
+                            </div>
+                            <div style={{ width: '100%', height: '8px', background: 'rgba(0,0,0,0.3)', borderRadius: '10px', overflow: 'hidden', position: 'relative' }}>
+                               <motion.div 
+                                 initial={{ width: 0 }} 
+                                 animate={{ width: `${s.percentage}%` }} 
+                                 transition={{ duration: 1.5, delay: i * 0.05, ease: "easeOut" }}
+                                 style={{ 
+                                   height: '100%', 
+                                   background: s.percentage >= 75 ? 'linear-gradient(90deg, #10B981, #34D399)' : s.percentage >= 50 ? 'linear-gradient(90deg, #06B6D4, #22D3EE)' : 'linear-gradient(90deg, #EF4444, #F87171)', 
+                                   borderRadius: '10px',
+                                   boxShadow: `0 0 10px ${s.percentage >= 75 ? '#10B981' : s.percentage >= 50 ? '#06B6D4' : '#EF4444'}`
+                                 }}
+                               />
+                            </div>
+                         </div>
+                      ))}
+                    </div>
                   </div>
                 )}
-                <div className="glass-card" style={{ padding: '24px', marginBottom: '32px' }}>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }} className="responsive-grid">
-                    <div>
-                      <label style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>Select Course</label>
-                      <select 
-                        className="input-field" 
-                        value={selectedCourse?.id} 
-                        onChange={(e) => setSelectedCourse(courses.find(c => c.id === e.target.value))}
-                        style={{ background: 'rgba(255,255,255,0.05)', color: 'white' }}
-                      >
-                        {courses.map(c => <option key={c.id} value={c.id} style={{background: '#1a1a1a'}}>{c.name}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>Date</label>
-                      <input type="date" className="input-field" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>Session</label>
-                      <select className="input-field" value={selectedSession} onChange={(e) => setSelectedSession(Number(e.target.value))}>
-                        {[1,2,3,4,5,6,7,8].map(s => <option key={s} value={s} style={{background: '#1a1a1a'}}>Session {s}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  
-                  {/* Live Course Stats */}
-                  {courseStats.highest.length > 0 && (
-                    <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid var(--glass-border)' }}>
-                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '32px' }} className="responsive-grid">
-                          <div>
-                             <h4 style={{ color: 'var(--success)', marginBottom: '12px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}><Trophy size={14}/> HIGHEST ATTENDANCE</h4>
-                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {courseStats.highest.map((s, i) => (
-                                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', background: 'rgba(255,255,255,0.02)', padding: '8px 12px', borderRadius: '8px' }}>
-                                      <span>{s.name} <span style={{color: 'var(--text-muted)', fontSize: '11px'}}>({s.roll_no})</span></span>
-                                      <span style={{ fontWeight: '600', color: 'var(--success)' }}>{s.percentage}%</span>
-                                   </div>
-                                ))}
-                             </div>
-                          </div>
-                          <div>
-                             <h4 style={{ color: 'var(--error)', marginBottom: '12px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}><AlertCircle size={14}/> LOWEST ATTENDANCE</h4>
-                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                {courseStats.lowest.map((s, i) => (
-                                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', background: 'rgba(255,255,255,0.02)', padding: '8px 12px', borderRadius: '8px' }}>
-                                      <span>{s.name} <span style={{color: 'var(--text-muted)', fontSize: '11px'}}>({s.roll_no})</span></span>
-                                      <span style={{ fontWeight: '600', color: 'var(--error)' }}>{s.percentage}%</span>
-                                   </div>
-                                ))}
-                             </div>
-                          </div>
-                       </div>
-                       
-                       <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                          <Book size={18} color="var(--accent-cyan)" /> Class Distribution Chart
-                       </h3>
-                       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '250px', overflowY: 'auto', paddingRight: '8px' }}>
-                         {courseStats.all.map((s, i) => (
-                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '13px' }}>
-                               <span style={{ width: '140px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: 'var(--text-muted)' }} onClick={() => openStudentProfile(s)}>{s.name}</span>
-                               <div style={{ flex: 1, height: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', overflow: 'hidden', position: 'relative' }}>
-                                  <motion.div 
-                                    initial={{ width: 0 }} 
-                                    animate={{ width: `${s.percentage}%` }} 
-                                    transition={{ duration: 1, delay: i * 0.05, ease: "easeOut" }}
-                                    style={{ height: '100%', background: s.percentage >= 75 ? 'linear-gradient(90deg, #10B981, #059669)' : s.percentage >= 50 ? 'linear-gradient(90deg, #06B6D4, #0891B2)' : 'linear-gradient(90deg, #EF4444, #B91C1C)', borderRadius: '6px' }}
-                                  />
-                               </div>
-                               <span style={{ width: '40px', textAlign: 'right', fontWeight: '700' }}>{s.percentage}%</span>
-                            </div>
-                         ))}
-                       </div>
-                    </div>
-                  )}
-                </div>
 
-                <div className="glass-card" style={{ padding: '32px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', flexWrap: 'wrap', gap: '20px' }}>
-                     <div>
-                        <h3 style={{ fontSize: '24px' }}>Student Roster</h3>
-                        <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{filteredStudents.length} Students found</p>
-                     </div>
-                     <div style={{ display: 'flex', gap: '12px', flex: 1, justifyContent: 'flex-end', minWidth: '300px' }} className="responsive-grid">
-                        <div style={{ position: 'relative', flex: 1 }}>
-                          <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                          <input 
-                            className="input-field" 
-                            placeholder="Search student..." 
-                            style={{ paddingLeft: '40px', height: '45px' }}
+                <div style={{ marginBottom: '24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
+                   <div style={{ position: 'relative', flex: 1, minWidth: '300px', maxWidth: '500px' }}>
+                      <div className={`glass-search-bar ${isSearchFocused ? 'focused' : ''}`} style={{ display: 'flex', alignItems: 'center', padding: '0 20px', height: '54px' }}>
+                         <Search size={20} color={isSearchFocused ? 'var(--accent-cyan)' : 'var(--text-muted)'} style={{ transition: 'color 0.3s' }} />
+                         <input 
+                            placeholder="Search students by name or roll..." 
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                          />
-                        </div>
-                        <button onClick={markAllPresent} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '45px' }}><Check size={18} /> Mark All Present</button>
-                        <LoadingButton onClick={handleSaveAttendance} loading={saving} style={{ height: '45px' }}><Save size={18} /> Save Attendance</LoadingButton>
-                     </div>
-                  </div>
-
-                  {/* Desktop Table */}
-                  <div className="desktop-only" style={{ overflow: 'hidden' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                       <thead style={{ background: 'rgba(255,255,255,0.02)' }}>
-                          <tr>
-                             <th style={{ textAlign: 'left', padding: '16px 24px', color: 'var(--text-muted)', fontSize: '12px' }}>STUDENT NAME</th>
-                             <th style={{ textAlign: 'center', padding: '16px 24px', color: 'var(--text-muted)', fontSize: '12px' }}>ATTENDANCE STATUS</th>
-                          </tr>
-                       </thead>
-                       <tbody>
-                          {filteredStudents.map(s => (
-                             <tr key={s.id} style={{ borderTop: '1px solid var(--glass-border)', transition: '0.2s' }} className="hover-row">
-                                <td style={{ padding: '16px 24px' }}>
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '14px', border: '1px solid var(--glass-border)' }}>{s.name[0]}</div>
-                                    <div><p style={{ fontWeight: '600' }}>{s.name}</p><p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{s.roll_no}</p></div>
-                                  </div>
-                                </td>
-                                <td style={{ padding: '16px 24px', textAlign: 'center' }}>
-                                   <AttendanceToggle 
-                                      status={attendanceRecords[s.id]} 
-                                      onToggle={(val) => setAttendanceRecords({...attendanceRecords, [s.id]: val})} 
-                                   />
-                                </td>
-                             </tr>
-                          ))}
-                       </tbody>
-                    </table>
-                  </div>
-
-                  {/* Mobile View: Animated Cards */}
-                  <div className="mobile-only" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                    <AnimatePresence>
-                      {filteredStudents.map((s, i) => (
-                        <motion.div 
-                          key={s.id} 
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: i * 0.03 }}
-                          className="glass-card" 
-                          style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: attendanceRecords[s.id] === 'absent' ? 'rgba(239, 68, 68, 0.05)' : 'var(--bg-surface)' }}
-                        >
-                          <div>
-                            <p style={{ fontWeight: '700', fontSize: '16px' }}>{s.name}</p>
-                            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{s.roll_no}</p>
-                          </div>
-                          <AttendanceToggle 
-                            status={attendanceRecords[s.id]} 
-                            onToggle={(val) => setAttendanceRecords({...attendanceRecords, [s.id]: val})} 
-                          />
-                        </motion.div>
+                            onFocus={() => setIsSearchFocused(true)}
+                            onBlur={() => setIsSearchFocused(false)}
+                            style={{ flex: 1, height: '100%', paddingLeft: '12px', fontSize: '15px' }}
+                         />
+                      </div>
+                   </div>
+                   
+                   <div style={{ display: 'flex', gap: '12px', overflowX: 'auto' }} className="scroll-hide">
+                      {['all', 'present', 'absent', 'late'].map(f => (
+                         <button 
+                            key={f}
+                            onClick={() => setFilterStatus(f)}
+                            style={{
+                               padding: '10px 20px', borderRadius: '100px', border: '1px solid rgba(255,255,255,0.1)', cursor: 'pointer', fontWeight: '600', fontSize: '13px', textTransform: 'capitalize', transition: 'all 0.3s ease',
+                               background: filterStatus === f ? 'rgba(255,255,255,0.1)' : 'transparent',
+                               color: filterStatus === f ? 'white' : 'var(--text-secondary)'
+                            }}
+                         >
+                            {f}
+                         </button>
                       ))}
-                    </AnimatePresence>
-                    {filteredStudents.length === 0 && <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No students found matching your search.</div>}
-                  </div>
+                   </div>
+
+                   <div style={{ display: 'flex', gap: '12px' }}>
+                      <button onClick={markAllPresent} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '54px', borderColor: 'var(--success)', color: 'var(--success)' }}>
+                         <CheckCircle size={18} /> Mark All Present
+                      </button>
+                      <LoadingButton onClick={handleSaveAttendance} loading={saving} style={{ height: '54px', background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-cyan))', boxShadow: '0 0 20px rgba(139, 92, 246, 0.4)' }} className="animated-gradient-btn">
+                         <Save size={18} /> Save Attendance
+                      </LoadingButton>
+                   </div>
                 </div>
+
+                {/* Premium Student Roster Cards */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '20px' }}>
+                  <AnimatePresence>
+                    {filteredStudents.map((s, i) => {
+                       const overallPct = courseStats.all.find(stat => stat.id === s.id)?.percentage || 0
+                       return (
+                         <motion.div 
+                           key={s.id} 
+                           initial={{ opacity: 0, y: 20 }}
+                           animate={{ opacity: 1, y: 0 }}
+                           exit={{ opacity: 0, scale: 0.95 }}
+                           transition={{ delay: i * 0.03 }}
+                           whileHover={{ scale: 1.02, y: -4 }}
+                           className={`glass-card ${attendanceRecords[s.id] === 'absent' ? 'neon-glow-red' : ''}`} 
+                           style={{ padding: '24px', position: 'relative', overflow: 'hidden', background: attendanceRecords[s.id] === 'absent' ? 'rgba(239, 68, 68, 0.03)' : 'var(--bg-surface)' }}
+                         >
+                           {attendanceRecords[s.id] === 'present' && <div style={{ position: 'absolute', top: 0, left: 0, width: '4px', height: '100%', background: 'var(--success)', boxShadow: '0 0 10px var(--success)' }} />}
+                           
+                           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                                 <div style={{ width: '48px', height: '48px', borderRadius: '16px', background: 'linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.02))', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '18px', fontWeight: '800', color: 'var(--accent-cyan)' }}>
+                                    {s.name[0]}
+                                 </div>
+                                 <div>
+                                    <h3 style={{ fontSize: '18px', fontWeight: '700', marginBottom: '4px' }}>{s.name}</h3>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                       <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{s.roll_no}</span>
+                                       <span style={{ fontSize: '10px', padding: '2px 8px', background: 'rgba(255,255,255,0.05)', borderRadius: '100px', color: 'var(--text-secondary)' }}>{selectedCourse?.name || 'Subject'}</span>
+                                    </div>
+                                 </div>
+                              </div>
+                              <div style={{ textAlign: 'right' }}>
+                                 <p style={{ fontSize: '18px', fontWeight: '800', color: overallPct >= 75 ? 'var(--success)' : overallPct >= 50 ? 'var(--accent-cyan)' : 'var(--error)' }}>{overallPct}%</p>
+                                 <p style={{ fontSize: '10px', color: 'var(--text-muted)' }}>OVERALL</p>
+                              </div>
+                           </div>
+
+                           <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+                              <AttendanceToggle 
+                                status={attendanceRecords[s.id]} 
+                                onToggle={(val) => setAttendanceRecords({...attendanceRecords, [s.id]: val})} 
+                              />
+                           </div>
+                         </motion.div>
+                       )
+                    })}
+                  </AnimatePresence>
+                </div>
+                {filteredStudents.length === 0 && (
+                   <div className="glass-card" style={{ padding: '60px', textAlign: 'center' }}>
+                      <Search size={48} color="var(--text-muted)" style={{ margin: '0 auto 16px', opacity: 0.5 }} />
+                      <h3 style={{ color: 'var(--text-secondary)' }}>No students found</h3>
+                      <p style={{ color: 'var(--text-muted)' }}>Try adjusting your search or filters.</p>
+                   </div>
+                )}
              </motion.div>
           )}
 
@@ -760,43 +797,39 @@ const TeacherDashboard = () => {
 
 const AttendanceToggle = ({ status, onToggle }: { status: 'present' | 'absent' | null, onToggle: (val: 'present' | 'absent') => void }) => {
   return (
-    <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.03)', borderRadius: '50px', padding: '4px', border: '1px solid var(--glass-border)' }}>
-      <motion.button
-        whileTap={{ scale: 0.95 }}
+    <div className="segmented-control" style={{ width: '160px', height: '36px' }}>
+      <div 
+        style={{ 
+          position: 'absolute', 
+          top: '4px', 
+          bottom: '4px', 
+          width: 'calc(50% - 4px)', 
+          left: status === 'present' ? '4px' : status === 'absent' ? 'calc(50%)' : '4px',
+          background: status === 'present' ? 'var(--success)' : status === 'absent' ? 'var(--error)' : 'transparent',
+          borderRadius: '100px',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          boxShadow: status === 'present' ? '0 0 15px rgba(16, 185, 129, 0.4)' : status === 'absent' ? '0 0 15px rgba(239, 68, 68, 0.4)' : 'none',
+          zIndex: 1
+        }} 
+      />
+      <button
         onClick={() => onToggle('present')}
         style={{
-          padding: '8px 20px',
-          borderRadius: '50px',
-          border: 'none',
-          background: status === 'present' ? 'var(--success)' : 'transparent',
-          color: status === 'present' ? 'white' : 'var(--text-muted)',
-          cursor: 'pointer',
-          fontSize: '11px',
-          fontWeight: '700',
-          transition: 'all 0.3s ease',
-          boxShadow: status === 'present' ? '0 0 15px rgba(16, 185, 129, 0.4)' : 'none'
+          flex: 1, border: 'none', background: 'transparent', color: status === 'present' ? 'white' : 'var(--text-muted)',
+          fontSize: '11px', fontWeight: '700', zIndex: 2, cursor: 'pointer', outline: 'none', transition: 'color 0.3s ease'
         }}
       >
         PRESENT
-      </motion.button>
-      <motion.button
-        whileTap={{ scale: 0.95 }}
+      </button>
+      <button
         onClick={() => onToggle('absent')}
         style={{
-          padding: '8px 20px',
-          borderRadius: '50px',
-          border: 'none',
-          background: status === 'absent' ? 'var(--error)' : 'transparent',
-          color: status === 'absent' ? 'white' : 'var(--text-muted)',
-          cursor: 'pointer',
-          fontSize: '11px',
-          fontWeight: '700',
-          transition: 'all 0.3s ease',
-          boxShadow: status === 'absent' ? '0 0 15px rgba(239, 68, 68, 0.4)' : 'none'
+          flex: 1, border: 'none', background: 'transparent', color: status === 'absent' ? 'white' : 'var(--text-muted)',
+          fontSize: '11px', fontWeight: '700', zIndex: 2, cursor: 'pointer', outline: 'none', transition: 'color 0.3s ease'
         }}
       >
         ABSENT
-      </motion.button>
+      </button>
     </div>
   )
 }
