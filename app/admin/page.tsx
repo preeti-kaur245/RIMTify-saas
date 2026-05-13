@@ -48,6 +48,16 @@ const AdminDashboard = () => {
   const [feeForm, setFeeForm] = useState({ student_id: '', title: '', amount: '', due_date: '' })
   const [announceForm, setAnnounceForm] = useState({ title: '', message: '', type: 'general', target_role: 'all' })
   const [payrollForm, setPayrollForm] = useState({ teacher_id: '', month: 'May', year: 2026, base_salary: '', bonus: '0', deductions: '0' })
+  const [promotionForm, setPromotionForm] = useState({ fromSemesterId: '', toSemesterId: '' })
+  
+  const [showHierarchyModal, setShowHierarchyModal] = useState(false)
+  const [hierarchyType, setHierarchyType] = useState<'dept' | 'prog' | 'sem' | 'sec' | 'sub'>('dept')
+  const [deptForm, setDeptForm] = useState({ name: '' })
+  const [progForm, setProgForm] = useState({ name: '', department_id: '', duration_years: 4 })
+  const [semForm, setSemForm] = useState({ program_id: '', term_number: 1, academic_year: '2026-2027' })
+  const [secForm, setSecForm] = useState({ semester_id: '', name: '' })
+  const [subForm, setSubForm] = useState({ semester_id: '', name: '', code: '', type: 'core' })
+
 
   const router = useRouter()
   const supabase = createClient()
@@ -186,6 +196,95 @@ const AdminDashboard = () => {
     } 
   }
 
+  const handleSemesterPromotion = async () => {
+    if (!promotionForm.fromSemesterId || !promotionForm.toSemesterId) {
+      alert('Please select both source and destination semesters.')
+      return
+    }
+    if (promotionForm.fromSemesterId === promotionForm.toSemesterId) {
+      alert('Source and destination semesters cannot be the same.')
+      return
+    }
+
+    if (!confirm('Are you sure you want to promote all students from the selected semester? This will mark current enrollments as promoted and create new enrollments.')) return
+
+    setProcessing(true)
+    try {
+      // 1. Fetch students in source semester
+      const { data: enrollments, error: fetchErr } = await supabase
+        .from('student_enrollments')
+        .select('*')
+        .eq('semester_id', promotionForm.fromSemesterId)
+        .eq('status', 'active')
+
+      if (fetchErr) throw fetchErr
+
+      if (!enrollments || enrollments.length === 0) {
+        alert('No active students found in the selected source semester.')
+        setProcessing(false)
+        return
+      }
+
+      // 2. Update status of old enrollments to 'promoted'
+      const { error: updateErr } = await supabase
+        .from('student_enrollments')
+        .update({ status: 'promoted' })
+        .eq('semester_id', promotionForm.fromSemesterId)
+        .eq('status', 'active')
+
+      if (updateErr) throw updateErr
+
+      // 3. Create new enrollments for the next semester
+      const newEnrollments = enrollments.map(e => ({
+        student_id: e.student_id,
+        semester_id: promotionForm.toSemesterId,
+        section_id: e.section_id, // Keep same section by default, can be changed later
+        status: 'active'
+      }))
+
+      const { error: insertErr } = await supabase
+        .from('student_enrollments')
+        .insert(newEnrollments)
+
+      if (insertErr) throw insertErr
+
+      alert(`Successfully promoted ${enrollments.length} students!`)
+      setPromotionForm({ fromSemesterId: '', toSemesterId: '' })
+      await fetchData()
+    } catch (err: any) {
+      console.error('Promotion error:', err)
+      alert('Failed to execute promotion: ' + err.message)
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+  const handleAddHierarchy = async () => {
+    setProcessing(true)
+    try {
+      if (hierarchyType === 'dept') {
+        await supabase.from('departments').insert([deptForm])
+      } else if (hierarchyType === 'prog') {
+        await supabase.from('programs').insert([progForm])
+      } else if (hierarchyType === 'sem') {
+        await supabase.from('semesters').insert([semForm])
+      } else if (hierarchyType === 'sec') {
+        await supabase.from('sections').insert([secForm])
+      } else if (hierarchyType === 'sub') {
+        await supabase.from('subjects').insert([subForm])
+      }
+      setShowHierarchyModal(false)
+      await fetchData()
+      alert('Successfully added!')
+    } catch (err: any) {
+      alert('Error: ' + err.message)
+    } finally {
+      setProcessing(false)
+    }
+  }
+
+
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex' }}>
       <ScreenLoader isLoading={processing} />
@@ -303,10 +402,17 @@ const AdminDashboard = () => {
 
           {activeTab === 'hierarchy' && (
             <motion.div key="hierarchy" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
                  <h2>Academic Structure</h2>
-                 <button className="btn-primary" onClick={() => alert('Add feature coming soon')}><Plus size={18} /> Add Entity</button>
+                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <button className="btn-secondary" onClick={() => { setHierarchyType('dept'); setShowHierarchyModal(true); }} style={{ fontSize: '12px' }}>+ Dept</button>
+                    <button className="btn-secondary" onClick={() => { setHierarchyType('prog'); setShowHierarchyModal(true); }} style={{ fontSize: '12px' }}>+ Program</button>
+                    <button className="btn-secondary" onClick={() => { setHierarchyType('sem'); setShowHierarchyModal(true); }} style={{ fontSize: '12px' }}>+ Sem</button>
+                    <button className="btn-secondary" onClick={() => { setHierarchyType('sec'); setShowHierarchyModal(true); }} style={{ fontSize: '12px' }}>+ Section</button>
+                    <button className="btn-secondary" onClick={() => { setHierarchyType('sub'); setShowHierarchyModal(true); }} style={{ fontSize: '12px' }}>+ Subject</button>
+                 </div>
               </div>
+
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
                  <div className="glass-card" style={{ padding: '24px', borderTop: '4px solid var(--accent-cyan)' }}>
                     <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}><Landmark size={20} color="var(--accent-cyan)" /> Departments</h3>
@@ -337,23 +443,38 @@ const AdminDashboard = () => {
                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', marginBottom: '32px' }}>
                     <div>
                        <label style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>From Semester</label>
-                       <select className="input-field" style={{ width: '100%', background: 'rgba(255,255,255,0.05)' }}>
+                       <select 
+                          className="input-field" 
+                          style={{ width: '100%', background: 'rgba(255,255,255,0.05)' }}
+                          value={promotionForm.fromSemesterId}
+                          onChange={(e) => setPromotionForm({ ...promotionForm, fromSemesterId: e.target.value })}
+                       >
                           <option value="">Select current semester...</option>
                           {semesters.map(s => <option key={s.id} value={s.id} style={{ background: '#1a1a1a' }}>Semester {s.term_number} ({s.academic_year})</option>)}
                        </select>
                     </div>
                     <div>
                        <label style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>To Semester (Destination)</label>
-                       <select className="input-field" style={{ width: '100%', background: 'rgba(255,255,255,0.05)' }}>
+                       <select 
+                          className="input-field" 
+                          style={{ width: '100%', background: 'rgba(255,255,255,0.05)' }}
+                          value={promotionForm.toSemesterId}
+                          onChange={(e) => setPromotionForm({ ...promotionForm, toSemesterId: e.target.value })}
+                       >
                           <option value="">Select next semester...</option>
                           {semesters.map(s => <option key={s.id} value={s.id} style={{ background: '#1a1a1a' }}>Semester {s.term_number} ({s.academic_year})</option>)}
                        </select>
                     </div>
                  </div>
                  
-                 <button className="btn-primary" style={{ width: '100%', background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-cyan))' }} onClick={() => alert('Promotion logic requires backend trigger. This UI is ready!')}>
+                 <button 
+                    className="btn-primary" 
+                    style={{ width: '100%', background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-cyan))' }} 
+                    onClick={handleSemesterPromotion}
+                 >
                     <ArrowUpRight size={18} style={{ marginRight: '8px' }} /> Execute Promotion
                  </button>
+
                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '16px' }}><AlertTriangle size={12} color="var(--error)" style={{ display: 'inline', marginRight: '4px' }} /> Warning: This will finalize current semester grades and attendance.</p>
               </div>
             </motion.div>
@@ -565,6 +686,67 @@ const AdminDashboard = () => {
           </motion.div>
         </div>
       )}
+
+      {showHierarchyModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '450px', padding: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+               <h3>Add {hierarchyType.toUpperCase()}</h3>
+               <button onClick={() => setShowHierarchyModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+
+            {hierarchyType === 'dept' && (
+               <input className="input-field" placeholder="Department Name" value={deptForm.name} onChange={e => setDeptForm({name: e.target.value})} style={{ marginBottom: '16px' }} />
+            )}
+
+            {hierarchyType === 'prog' && (
+               <>
+                  <select className="input-field" value={progForm.department_id} onChange={e => setProgForm({...progForm, department_id: e.target.value})} style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }}>
+                     <option value="">Select Department</option>
+                     {departments.map(d => <option key={d.id} value={d.id} style={{background: '#1a1a1a'}}>{d.name}</option>)}
+                  </select>
+                  <input className="input-field" placeholder="Program Name (e.g. BCA)" value={progForm.name} onChange={e => setProgForm({...progForm, name: e.target.value})} style={{ marginBottom: '16px' }} />
+                  <input type="number" className="input-field" placeholder="Duration Years" value={progForm.duration_years} onChange={e => setProgForm({...progForm, duration_years: parseInt(e.target.value)})} style={{ marginBottom: '16px' }} />
+               </>
+            )}
+
+            {hierarchyType === 'sem' && (
+               <>
+                  <select className="input-field" value={semForm.program_id} onChange={e => setSemForm({...semForm, program_id: e.target.value})} style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }}>
+                     <option value="">Select Program</option>
+                     {programs.map(p => <option key={p.id} value={p.id} style={{background: '#1a1a1a'}}>{p.name}</option>)}
+                  </select>
+                  <input type="number" className="input-field" placeholder="Term Number" value={semForm.term_number} onChange={e => setSemForm({...semForm, term_number: parseInt(e.target.value)})} style={{ marginBottom: '16px' }} />
+                  <input className="input-field" placeholder="Academic Year (e.g. 2026-27)" value={semForm.academic_year} onChange={e => setSemForm({...semForm, academic_year: e.target.value})} style={{ marginBottom: '16px' }} />
+               </>
+            )}
+
+            {hierarchyType === 'sec' && (
+               <>
+                  <select className="input-field" value={secForm.semester_id} onChange={e => setSecForm({...secForm, semester_id: e.target.value})} style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }}>
+                     <option value="">Select Semester</option>
+                     {semesters.map(s => <option key={s.id} value={s.id} style={{background: '#1a1a1a'}}>Semester {s.term_number} ({s.academic_year})</option>)}
+                  </select>
+                  <input className="input-field" placeholder="Section Name (e.g. A)" value={secForm.name} onChange={e => setSecForm({...secForm, name: e.target.value})} style={{ marginBottom: '16px' }} />
+               </>
+            )}
+
+            {hierarchyType === 'sub' && (
+               <>
+                  <select className="input-field" value={subForm.semester_id} onChange={e => setSubForm({...subForm, semester_id: e.target.value})} style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }}>
+                     <option value="">Select Semester</option>
+                     {semesters.map(s => <option key={s.id} value={s.id} style={{background: '#1a1a1a'}}>Semester {s.term_number}</option>)}
+                  </select>
+                  <input className="input-field" placeholder="Subject Name" value={subForm.name} onChange={e => setSubForm({...subForm, name: e.target.value})} style={{ marginBottom: '16px' }} />
+                  <input className="input-field" placeholder="Subject Code" value={subForm.code} onChange={e => setSubForm({...subForm, code: e.target.value})} style={{ marginBottom: '16px' }} />
+               </>
+            )}
+
+            <LoadingButton onClick={handleAddHierarchy} loading={processing} style={{ width: '100%', background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-cyan))' }}>Add Entity</LoadingButton>
+          </motion.div>
+        </div>
+      )}
+
     </div>
   )
 }
