@@ -37,6 +37,7 @@ const TeacherDashboard = () => {
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState({ text: '', type: '' })
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [searchTerm, setSearchTerm] = useState('')
 
   const router = useRouter()
   const supabase = createClient()
@@ -104,6 +105,21 @@ const TeacherDashboard = () => {
       data.forEach(s => initialAttendance[s.id] = 'present')
       setAttendanceRecords(initialAttendance)
     }
+  }
+
+  const filteredStudents = useMemo(() => {
+    return students.filter(s => 
+      s.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      s.roll_no.toLowerCase().includes(searchTerm.toLowerCase())
+    )
+  }, [students, searchTerm])
+
+  const markAllPresent = () => {
+    const newRecords = { ...attendanceRecords }
+    filteredStudents.forEach(s => {
+      newRecords[s.id] = 'present'
+    })
+    setAttendanceRecords(newRecords)
   }
 
   const fetchMaterials = async () => {
@@ -394,32 +410,83 @@ const TeacherDashboard = () => {
                   )}
                 </div>
 
-                <div className="glass-card" style={{ padding: '32px', overflow: 'hidden' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                     <h3>Student Roster ({students.length})</h3>
-                     <LoadingButton onClick={handleSaveAttendance} loading={saving}>Save Attendance</LoadingButton>
+                <div className="glass-card" style={{ padding: '32px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '32px', flexWrap: 'wrap', gap: '20px' }}>
+                     <div>
+                        <h3 style={{ fontSize: '24px' }}>Student Roster</h3>
+                        <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>{filteredStudents.length} Students found</p>
+                     </div>
+                     <div style={{ display: 'flex', gap: '12px', flex: 1, justifyContent: 'flex-end', minWidth: '300px' }} className="responsive-grid">
+                        <div style={{ position: 'relative', flex: 1 }}>
+                          <Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                          <input 
+                            className="input-field" 
+                            placeholder="Search student..." 
+                            style={{ paddingLeft: '40px', height: '45px' }}
+                            value={searchTerm}
+                            onChange={(e) => setSearchTerm(e.target.value)}
+                          />
+                        </div>
+                        <button onClick={markAllPresent} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '8px', height: '45px' }}><Check size={18} /> Mark All Present</button>
+                        <LoadingButton onClick={handleSaveAttendance} loading={saving} style={{ height: '45px' }}><Save size={18} /> Save Attendance</LoadingButton>
+                     </div>
                   </div>
-                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                     <thead style={{ background: 'rgba(255,255,255,0.02)' }}>
-                        <tr>
-                           <th style={{ textAlign: 'left', padding: '16px 24px', color: 'var(--text-muted)', fontSize: '12px' }}>STUDENT NAME</th>
-                           <th style={{ textAlign: 'center', padding: '16px 24px', color: 'var(--text-muted)', fontSize: '12px' }}>STATUS</th>
-                        </tr>
-                     </thead>
-                     <tbody>
-                        {students.map(s => (
-                           <tr key={s.id} style={{ borderTop: '1px solid var(--glass-border)' }}>
-                              <td style={{ padding: '16px 24px' }}><p style={{ fontWeight: '600' }}>{s.name}</p><p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{s.roll_no}</p></td>
-                              <td style={{ padding: '16px 24px', textAlign: 'center' }}>
-                                 <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.05)', borderRadius: '50px', padding: '4px' }}>
-                                    <button onClick={() => setAttendanceRecords({...attendanceRecords, [s.id]: 'present'})} style={{ padding: '6px 16px', borderRadius: '50px', border: 'none', background: attendanceRecords[s.id] === 'present' ? 'var(--success)' : 'transparent', color: attendanceRecords[s.id] === 'present' ? 'white' : 'var(--text-muted)', cursor: 'pointer', transition: '0.2s', fontSize: '12px', fontWeight: '600' }}>PRESENT</button>
-                                    <button onClick={() => setAttendanceRecords({...attendanceRecords, [s.id]: 'absent'})} style={{ padding: '6px 16px', borderRadius: '50px', border: 'none', background: attendanceRecords[s.id] === 'absent' ? 'var(--error)' : 'transparent', color: attendanceRecords[s.id] === 'absent' ? 'white' : 'var(--text-muted)', cursor: 'pointer', transition: '0.2s', fontSize: '12px', fontWeight: '600' }}>ABSENT</button>
-                                 </div>
-                              </td>
-                           </tr>
-                        ))}
-                     </tbody>
-                  </table>
+
+                  {/* Desktop Table */}
+                  <div className="desktop-only" style={{ overflow: 'hidden' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                       <thead style={{ background: 'rgba(255,255,255,0.02)' }}>
+                          <tr>
+                             <th style={{ textAlign: 'left', padding: '16px 24px', color: 'var(--text-muted)', fontSize: '12px' }}>STUDENT NAME</th>
+                             <th style={{ textAlign: 'center', padding: '16px 24px', color: 'var(--text-muted)', fontSize: '12px' }}>ATTENDANCE STATUS</th>
+                          </tr>
+                       </thead>
+                       <tbody>
+                          {filteredStudents.map(s => (
+                             <tr key={s.id} style={{ borderTop: '1px solid var(--glass-border)', transition: '0.2s' }} className="hover-row">
+                                <td style={{ padding: '16px 24px' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                                    <div style={{ width: '36px', height: '36px', borderRadius: '10px', background: 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold', fontSize: '14px', border: '1px solid var(--glass-border)' }}>{s.name[0]}</div>
+                                    <div><p style={{ fontWeight: '600' }}>{s.name}</p><p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{s.roll_no}</p></div>
+                                  </div>
+                                </td>
+                                <td style={{ padding: '16px 24px', textAlign: 'center' }}>
+                                   <AttendanceToggle 
+                                      status={attendanceRecords[s.id]} 
+                                      onToggle={(val) => setAttendanceRecords({...attendanceRecords, [s.id]: val})} 
+                                   />
+                                </td>
+                             </tr>
+                          ))}
+                       </tbody>
+                    </table>
+                  </div>
+
+                  {/* Mobile View: Animated Cards */}
+                  <div className="mobile-only" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    <AnimatePresence>
+                      {filteredStudents.map((s, i) => (
+                        <motion.div 
+                          key={s.id} 
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: i * 0.03 }}
+                          className="glass-card" 
+                          style={{ padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: attendanceRecords[s.id] === 'absent' ? 'rgba(239, 68, 68, 0.05)' : 'var(--bg-surface)' }}
+                        >
+                          <div>
+                            <p style={{ fontWeight: '700', fontSize: '16px' }}>{s.name}</p>
+                            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{s.roll_no}</p>
+                          </div>
+                          <AttendanceToggle 
+                            status={attendanceRecords[s.id]} 
+                            onToggle={(val) => setAttendanceRecords({...attendanceRecords, [s.id]: val})} 
+                          />
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                    {filteredStudents.length === 0 && <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>No students found matching your search.</div>}
+                  </div>
                 </div>
              </motion.div>
           )}
@@ -687,6 +754,49 @@ const TeacherDashboard = () => {
           </div>
         )}
       </AnimatePresence>
+    </div>
+  )
+}
+
+const AttendanceToggle = ({ status, onToggle }: { status: 'present' | 'absent' | null, onToggle: (val: 'present' | 'absent') => void }) => {
+  return (
+    <div style={{ display: 'inline-flex', background: 'rgba(255,255,255,0.03)', borderRadius: '50px', padding: '4px', border: '1px solid var(--glass-border)' }}>
+      <motion.button
+        whileTap={{ scale: 0.95 }}
+        onClick={() => onToggle('present')}
+        style={{
+          padding: '8px 20px',
+          borderRadius: '50px',
+          border: 'none',
+          background: status === 'present' ? 'var(--success)' : 'transparent',
+          color: status === 'present' ? 'white' : 'var(--text-muted)',
+          cursor: 'pointer',
+          fontSize: '11px',
+          fontWeight: '700',
+          transition: 'all 0.3s ease',
+          boxShadow: status === 'present' ? '0 0 15px rgba(16, 185, 129, 0.4)' : 'none'
+        }}
+      >
+        PRESENT
+      </motion.button>
+      <motion.button
+        whileTap={{ scale: 0.95 }}
+        onClick={() => onToggle('absent')}
+        style={{
+          padding: '8px 20px',
+          borderRadius: '50px',
+          border: 'none',
+          background: status === 'absent' ? 'var(--error)' : 'transparent',
+          color: status === 'absent' ? 'white' : 'var(--text-muted)',
+          cursor: 'pointer',
+          fontSize: '11px',
+          fontWeight: '700',
+          transition: 'all 0.3s ease',
+          boxShadow: status === 'absent' ? '0 0 15px rgba(239, 68, 68, 0.4)' : 'none'
+        }}
+      >
+        ABSENT
+      </motion.button>
     </div>
   )
 }
