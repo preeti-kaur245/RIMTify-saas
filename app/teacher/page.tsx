@@ -19,6 +19,14 @@ const TeacherDashboard = () => {
   const [selectedCourse, setSelectedCourse] = useState<any>(null)
   const [courses, setCourses] = useState<any[]>([])
   
+  // New University Hierarchy State
+  const [semesters, setSemesters] = useState<any[]>([])
+  const [sections, setSections] = useState<any[]>([])
+  const [subjects, setSubjects] = useState<any[]>([])
+  const [selectedSemester, setSelectedSemester] = useState<any>(null)
+  const [selectedSection, setSelectedSection] = useState<any>(null)
+  const [selectedSubject, setSelectedSubject] = useState<any>(null)
+  
   const [students, setStudents] = useState<any[]>([])
   const [attendanceRecords, setAttendanceRecords] = useState<Record<string, 'present' | 'absent' | null>>({})
   const [courseStats, setCourseStats] = useState<{highest: any[], lowest: any[], all: any[]}>({highest: [], lowest: [], all: []})
@@ -51,11 +59,12 @@ const TeacherDashboard = () => {
         await Promise.all([
           fetchInitialData(),
           fetchCourses(),
+          fetchHierarchy(),
           fetchAnnouncements(),
           fetchPayroll(),
-          fetchStudents(),
           fetchMaterials()
         ])
+        await fetchStudents() // Needs to happen after hierarchy if possible
       } catch (error) {
         console.error("Error loading data:", error)
       } finally {
@@ -66,10 +75,16 @@ const TeacherDashboard = () => {
   }, [])
 
   useEffect(() => {
-    if (selectedCourse && students.length > 0) {
-      fetchCourseStats(selectedCourse.name)
+    if (selectedCourse || selectedSubject) {
+      if (students.length > 0) {
+        fetchCourseStats(selectedSubject?.name || selectedCourse?.name)
+      }
     }
-  }, [selectedCourse, students])
+  }, [selectedCourse, selectedSubject, students])
+
+  useEffect(() => {
+    if (!loading) fetchStudents()
+  }, [selectedSection])
 
   const fetchInitialData = async () => {
     const { data: user } = await supabase.auth.getUser()
@@ -99,7 +114,60 @@ const TeacherDashboard = () => {
     if (data) { setCourses(data); if (data.length > 0) setSelectedCourse(data[0]) }
   }
 
+  const fetchHierarchy = async () => {
+    try {
+      const { data: user } = await supabase.auth.getUser()
+      if (!user?.user) return
+      
+      const { data: assignments, error } = await supabase.from('faculty_assignments')
+        .select(`
+          id, 
+          subjects (id, name, code, semester_id),
+          sections (id, name, semester_id)
+        `)
+        .eq('teacher_id', user.user.id)
+        
+      if (!error && assignments && assignments.length > 0) {
+        // Extract unique subjects and sections from assignments
+        const uniqueSubjects = Array.from(new Map(assignments.map((a: any) => [a.subjects.id, a.subjects])).values())
+        const uniqueSections = Array.from(new Map(assignments.map((a: any) => [a.sections.id, a.sections])).values())
+        
+        setSubjects(uniqueSubjects)
+        setSections(uniqueSections)
+        if (uniqueSubjects.length > 0) setSelectedSubject(uniqueSubjects[0])
+        if (uniqueSections.length > 0) setSelectedSection(uniqueSections[0])
+        
+        // Fetch corresponding semesters
+        const semIds = Array.from(new Set(uniqueSections.map((s: any) => s.semester_id)))
+        const { data: sems } = await supabase.from('semesters').select('*').in('id', semIds)
+        if (sems) {
+           setSemesters(sems)
+           if (sems.length > 0) setSelectedSemester(sems[0])
+        }
+      }
+    } catch (e) {
+      console.log('Hierarchy not available yet, falling back.')
+    }
+  }
+
   const fetchStudents = async () => {
+    // If we have a selected section, fetch from student_enrollments. Otherwise fallback to old profiles fetch.
+    if (selectedSection) {
+       const { data, error } = await supabase.from('student_enrollments')
+         .select('profiles(*)')
+         .eq('section_id', selectedSection.id)
+         
+       if (!error && data) {
+         const enrolledStudents = data.map((d: any) => d.profiles)
+         setStudents(enrolledStudents)
+         const initialAttendance: Record<string, any> = {}
+         enrolledStudents.forEach(s => initialAttendance[s.id] = 'present')
+         setAttendanceRecords(initialAttendance)
+         return
+       }
+    }
+
+    // Fallback
     const { data } = await supabase.from('profiles').select('*').eq('role', 'student').order('roll_no', { ascending: true })
     if (data) {
       setStudents(data)
@@ -205,12 +273,17 @@ const TeacherDashboard = () => {
   const handleSaveAttendance = async () => {
     setSaving(true)
     const { data: user } = await supabase.auth.getUser()
-    if (!user?.user || !selectedCourse) return
+    if (!user?.user) return
+    if (!selectedCourse && !selectedSubject) return
+    
+    const subjectName = selectedSubject?.name || selectedCourse?.name
     
     const records = students.map(s => ({
       student_id: s.id,
       teacher_id: user.user.id,
-      subject: selectedCourse.name,
+      subject: subjectName,
+      subject_id: selectedSubject?.id || null,
+      section_id: selectedSection?.id || null,
       date: selectedDate,
       session_no: selectedSession,
       status: attendanceRecords[s.id] || 'present'
@@ -219,12 +292,12 @@ const TeacherDashboard = () => {
     // Delete existing records to allow seamless updates/editing
     await supabase.from('attendance')
       .delete()
-      .match({ teacher_id: user.user.id, subject: selectedCourse.name, date: selectedDate, session_no: selectedSession })
+      .match({ teacher_id: user.user.id, subject: subjectName, date: selectedDate, session_no: selectedSession })
       
     await supabase.from('attendance').insert(records)
     setMessage({ text: 'Attendance saved successfully', type: 'success' })
     fetchInitialData()
-    if (selectedCourse) fetchCourseStats(selectedCourse.name)
+    fetchCourseStats(subjectName)
     setSaving(false)
     setTimeout(() => setMessage({ text: '', type: '' }), 3000)
   }
@@ -334,13 +407,27 @@ const TeacherDashboard = () => {
                       <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Class Active • {selectedDate} (Session {selectedSession})</span>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '12px' }}>
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
                      {/* Controls moved to a sleek inline bar */}
-                     <select className="input-field" value={selectedCourse?.id} onChange={(e) => setSelectedCourse(courses.find(c => c.id === e.target.value))} style={{ background: 'rgba(255,255,255,0.05)', color: 'white', width: 'auto', padding: '8px 16px', borderRadius: '100px' }}>
-                        {courses.map(c => <option key={c.id} value={c.id} style={{background: '#1a1a1a'}}>{c.name}</option>)}
-                     </select>
-                     <input type="date" className="input-field desktop-only" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} style={{ width: 'auto', padding: '8px 16px', borderRadius: '100px' }} />
-                     <select className="input-field desktop-only" value={selectedSession} onChange={(e) => setSelectedSession(Number(e.target.value))} style={{ width: 'auto', padding: '8px 16px', borderRadius: '100px' }}>
+                     {subjects.length > 0 ? (
+                       <>
+                         <select className="input-field" value={selectedSubject?.id || ''} onChange={(e) => setSelectedSubject(subjects.find(s => s.id === e.target.value))} style={{ background: 'rgba(255,255,255,0.05)', color: 'white', width: 'auto', padding: '8px 16px', borderRadius: '100px', fontSize: '13px' }}>
+                            {subjects.map(s => <option key={s.id} value={s.id} style={{background: '#1a1a1a'}}>{s.name} ({s.code})</option>)}
+                         </select>
+                         <select className="input-field desktop-only" value={selectedSemester?.id || ''} onChange={(e) => setSelectedSemester(semesters.find(s => s.id === e.target.value))} style={{ background: 'rgba(255,255,255,0.05)', color: 'white', width: 'auto', padding: '8px 16px', borderRadius: '100px', fontSize: '13px' }}>
+                            {semesters.map(s => <option key={s.id} value={s.id} style={{background: '#1a1a1a'}}>Semester {s.term_number}</option>)}
+                         </select>
+                         <select className="input-field desktop-only" value={selectedSection?.id || ''} onChange={(e) => setSelectedSection(sections.find(s => s.id === e.target.value))} style={{ background: 'rgba(255,255,255,0.05)', color: 'white', width: 'auto', padding: '8px 16px', borderRadius: '100px', fontSize: '13px' }}>
+                            {sections.map(s => <option key={s.id} value={s.id} style={{background: '#1a1a1a'}}>Section {s.name}</option>)}
+                         </select>
+                       </>
+                     ) : (
+                       <select className="input-field" value={selectedCourse?.id} onChange={(e) => setSelectedCourse(courses.find(c => c.id === e.target.value))} style={{ background: 'rgba(255,255,255,0.05)', color: 'white', width: 'auto', padding: '8px 16px', borderRadius: '100px', fontSize: '13px' }}>
+                          {courses.map(c => <option key={c.id} value={c.id} style={{background: '#1a1a1a'}}>{c.name}</option>)}
+                       </select>
+                     )}
+                     <input type="date" className="input-field desktop-only" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} style={{ width: 'auto', padding: '8px 16px', borderRadius: '100px', fontSize: '13px' }} />
+                     <select className="input-field desktop-only" value={selectedSession} onChange={(e) => setSelectedSession(Number(e.target.value))} style={{ width: 'auto', padding: '8px 16px', borderRadius: '100px', fontSize: '13px' }}>
                         {[1,2,3,4,5,6,7,8].map(s => <option key={s} value={s} style={{background: '#1a1a1a'}}>Session {s}</option>)}
                      </select>
                   </div>

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Users, UserPlus, LogOut, LayoutDashboard, Settings, Shield, 
   BookOpen, CreditCard, Search, Trash2, Edit3, Filter, 
-  MoreVertical, Upload, FileText, Plus, X, Check, AlertTriangle, Book, Landmark, Bookmark, Bell, DollarSign, Megaphone, Loader2, TrendingUp, ArrowUpRight, Menu
+  MoreVertical, Upload, FileText, Plus, X, Check, AlertTriangle, Book, Landmark, Bookmark, Bell, DollarSign, Megaphone, Loader2, TrendingUp, ArrowUpRight, Menu, Clock
 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -16,6 +16,15 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview')
   const [users, setUsers] = useState<any[]>([])
   const [courses, setCourses] = useState<any[]>([])
+  
+  // University Hierarchy States
+  const [departments, setDepartments] = useState<any[]>([])
+  const [programs, setPrograms] = useState<any[]>([])
+  const [semesters, setSemesters] = useState<any[]>([])
+  const [sections, setSections] = useState<any[]>([])
+  const [subjects, setSubjects] = useState<any[]>([])
+  const [facultyAssignments, setFacultyAssignments] = useState<any[]>([])
+
   const [fees, setFees] = useState<any[]>([])
   const [books, setBooks] = useState<any[]>([])
   const [announcements, setAnnouncements] = useState<any[]>([])
@@ -49,17 +58,36 @@ const AdminDashboard = () => {
     setLoading(true)
     const { data: u } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
     const { data: c } = await supabase.from('courses').select('*')
+    
+    // Fetch hierarchy tables (with error fallback in case migration not applied yet)
+    try {
+      const [{data: d}, {data: p}, {data: s}, {data: sec}, {data: sub}, {data: fa}] = await Promise.all([
+        supabase.from('departments').select('*'),
+        supabase.from('programs').select('*'),
+        supabase.from('semesters').select('*'),
+        supabase.from('sections').select('*'),
+        supabase.from('subjects').select('*'),
+        supabase.from('faculty_assignments').select('*, profiles(name), subjects(name), sections(name)')
+      ])
+      if(d) setDepartments(d)
+      if(p) setPrograms(p)
+      if(s) setSemesters(s)
+      if(sec) setSections(sec)
+      if(sub) setSubjects(sub)
+      if(fa) setFacultyAssignments(fa)
+    } catch(e) { console.log('Hierarchy tables not yet available') }
+
     const { data: f } = await supabase.from('fees').select('*, profiles(name, roll_no)')
     const { data: b } = await supabase.from('books').select('*')
     const { data: a } = await supabase.from('announcements').select('*').order('created_at', { ascending: false })
-    const { data: p } = await supabase.from('payroll').select('*, profiles(name)')
+    const { data: pr } = await supabase.from('payroll').select('*, profiles(name)')
     
     if (u) setUsers(u)
     if (c) setCourses(c)
     if (f) setFees(f)
     if (b) setBooks(b)
     if (a) setAnnouncements(a)
-    if (p) setPayrolls(p)
+    if (pr) setPayrolls(pr)
     setLoading(false)
   }
 
@@ -184,7 +212,9 @@ const AdminDashboard = () => {
         <nav style={{ flex: 1, overflowY: 'auto' }}>
           <SidebarItem icon={<LayoutDashboard size={18} />} label="Overview" active={activeTab === 'overview'} onClick={() => { setActiveTab('overview'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<Users size={18} />} label="Users" active={activeTab === 'users'} onClick={() => { setActiveTab('users'); setIsSidebarOpen(false); }} />
-          <SidebarItem icon={<Book size={18} />} label="Courses" active={activeTab === 'courses'} onClick={() => { setActiveTab('courses'); setIsSidebarOpen(false); }} />
+          <SidebarItem icon={<Book size={18} />} label="Academic Structure" active={activeTab === 'hierarchy'} onClick={() => { setActiveTab('hierarchy'); setIsSidebarOpen(false); }} />
+          <SidebarItem icon={<ArrowUpRight size={18} />} label="Semester Promotion" active={activeTab === 'promotion'} onClick={() => { setActiveTab('promotion'); setIsSidebarOpen(false); }} />
+          <SidebarItem icon={<Book size={18} />} label="Courses (Legacy)" active={activeTab === 'courses'} onClick={() => { setActiveTab('courses'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<Landmark size={18} />} label="Finance" active={activeTab === 'finance'} onClick={() => { setActiveTab('finance'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<DollarSign size={18} />} label="Payroll" active={activeTab === 'payroll'} onClick={() => { setActiveTab('payroll'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<Bookmark size={18} />} label="Library" active={activeTab === 'library'} onClick={() => { setActiveTab('library'); setIsSidebarOpen(false); }} />
@@ -267,6 +297,64 @@ const AdminDashboard = () => {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'hierarchy' && (
+            <motion.div key="hierarchy" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+                 <h2>Academic Structure</h2>
+                 <button className="btn-primary" onClick={() => alert('Add feature coming soon')}><Plus size={18} /> Add Entity</button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '20px' }}>
+                 <div className="glass-card" style={{ padding: '24px', borderTop: '4px solid var(--accent-cyan)' }}>
+                    <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}><Landmark size={20} color="var(--accent-cyan)" /> Departments</h3>
+                    {departments.length > 0 ? departments.map(d => <p key={d.id} style={{ padding: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{d.name}</p>) : <p style={{ color: 'var(--text-muted)' }}>No departments found</p>}
+                 </div>
+                 <div className="glass-card" style={{ padding: '24px', borderTop: '4px solid var(--accent-purple)' }}>
+                    <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}><BookOpen size={20} color="var(--accent-purple)" /> Programs</h3>
+                    {programs.length > 0 ? programs.map(p => <p key={p.id} style={{ padding: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>{p.name} ({p.duration_years} yrs)</p>) : <p style={{ color: 'var(--text-muted)' }}>No programs found</p>}
+                 </div>
+                 <div className="glass-card" style={{ padding: '24px', borderTop: '4px solid var(--accent-magenta)' }}>
+                    <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}><Clock size={20} color="var(--accent-magenta)" /> Semesters & Sections</h3>
+                    {semesters.length > 0 ? semesters.map(s => <p key={s.id} style={{ padding: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Semester {s.term_number} ({s.academic_year})</p>) : <p style={{ color: 'var(--text-muted)' }}>No semesters found</p>}
+                 </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'promotion' && (
+            <motion.div key="promotion" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div style={{ marginBottom: '32px' }}>
+                 <h2>Semester Promotion Wizard</h2>
+                 <p style={{ color: 'var(--text-muted)' }}>Easily migrate students from one semester to the next, archiving old records automatically.</p>
+              </div>
+              <div className="glass-card" style={{ padding: '32px', maxWidth: '600px', margin: '0 auto', textAlign: 'center' }}>
+                 <TrendingUp size={48} color="var(--accent-cyan)" style={{ margin: '0 auto 24px' }} />
+                 <h3 style={{ marginBottom: '24px' }}>Batch Promotion</h3>
+                 
+                 <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', marginBottom: '32px' }}>
+                    <div>
+                       <label style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>From Semester</label>
+                       <select className="input-field" style={{ width: '100%', background: 'rgba(255,255,255,0.05)' }}>
+                          <option value="">Select current semester...</option>
+                          {semesters.map(s => <option key={s.id} value={s.id} style={{ background: '#1a1a1a' }}>Semester {s.term_number} ({s.academic_year})</option>)}
+                       </select>
+                    </div>
+                    <div>
+                       <label style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>To Semester (Destination)</label>
+                       <select className="input-field" style={{ width: '100%', background: 'rgba(255,255,255,0.05)' }}>
+                          <option value="">Select next semester...</option>
+                          {semesters.map(s => <option key={s.id} value={s.id} style={{ background: '#1a1a1a' }}>Semester {s.term_number} ({s.academic_year})</option>)}
+                       </select>
+                    </div>
+                 </div>
+                 
+                 <button className="btn-primary" style={{ width: '100%', background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-cyan))' }} onClick={() => alert('Promotion logic requires backend trigger. This UI is ready!')}>
+                    <ArrowUpRight size={18} style={{ marginRight: '8px' }} /> Execute Promotion
+                 </button>
+                 <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '16px' }}><AlertTriangle size={12} color="var(--error)" style={{ display: 'inline', marginRight: '4px' }} /> Warning: This will finalize current semester grades and attendance.</p>
               </div>
             </motion.div>
           )}
