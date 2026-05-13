@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   CheckCircle, XCircle, Calendar, BookOpen, LogOut, 
   Search, Filter, History, Users, Save, Check, AlertCircle, 
-  ChevronRight, Clock, Edit2, FileText, Upload, Plus, X, Link as LinkIcon, Loader2, Trash2, Book, Trophy, DollarSign, Megaphone
+  ChevronRight, Clock, Edit2, FileText, Upload, Plus, X, Link as LinkIcon, Loader2, Trash2, Book, Trophy, DollarSign, Megaphone, Menu
 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -36,6 +36,9 @@ const TeacherDashboard = () => {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState({ text: '', type: '' })
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  const switchTab = (tab: string) => { setActiveTab(tab); setSidebarOpen(false) }
 
   const router = useRouter()
   const supabase = createClient()
@@ -264,25 +267,31 @@ const TeacherDashboard = () => {
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex' }}>
+    <div className="dashboard-layout">
       <ScreenLoader isLoading={loading} message="Fetching latest data..." />
       <ScreenLoader isLoading={saving} message="Saving changes..." />
       
-      <aside className="glass-card" style={{ width: '280px', borderRadius: '0 32px 32px 0', padding: '32px 16px', display: 'flex', flexDirection: 'column', height: '100vh', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ padding: '0 16px', marginBottom: '40px' }}><h2 className="neon-text" style={{ fontSize: '24px', fontWeight: '800' }}>FACULTY</h2></div>
-        <nav style={{ flex: 1, overflowY: 'auto' }}>
-          <SidebarItem icon={<CheckCircle size={18} />} label="Attendance" active={activeTab === 'attendance'} onClick={() => setActiveTab('attendance')} />
-          <SidebarItem icon={<Book size={18} />} label="Materials" active={activeTab === 'materials'} onClick={() => setActiveTab('materials')} />
-          <SidebarItem icon={<Megaphone size={18} />} label="Announce" active={activeTab === 'announce'} onClick={() => setActiveTab('announce')} />
-          <SidebarItem icon={<Trophy size={18} />} label="Grades" active={activeTab === 'grades'} onClick={() => setActiveTab('grades')} />
-          <SidebarItem icon={<DollarSign size={18} />} label="My Payroll" active={activeTab === 'payroll'} onClick={() => setActiveTab('payroll')} />
-          <SidebarItem icon={<History size={18} />} label="History" active={activeTab === 'history'} onClick={() => setActiveTab('history')} />
-          <SidebarItem icon={<Users size={18} />} label="Students" active={activeTab === 'students'} onClick={() => setActiveTab('students')} />
+      <button className="mobile-menu-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
+        {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
+      </button>
+
+      {sidebarOpen && <div className="mobile-sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+
+      <aside className={`glass-card dashboard-sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <div className="sidebar-brand"><h2 className="neon-text" style={{ fontSize: '24px', fontWeight: '800' }}>FACULTY</h2></div>
+        <nav className="sidebar-nav">
+          <SidebarItem icon={<CheckCircle size={18} />} label="Attendance" active={activeTab === 'attendance'} onClick={() => switchTab('attendance')} />
+          <SidebarItem icon={<Book size={18} />} label="Materials" active={activeTab === 'materials'} onClick={() => switchTab('materials')} />
+          <SidebarItem icon={<Megaphone size={18} />} label="Announce" active={activeTab === 'announce'} onClick={() => switchTab('announce')} />
+          <SidebarItem icon={<Trophy size={18} />} label="Grades" active={activeTab === 'grades'} onClick={() => switchTab('grades')} />
+          <SidebarItem icon={<DollarSign size={18} />} label="My Payroll" active={activeTab === 'payroll'} onClick={() => switchTab('payroll')} />
+          <SidebarItem icon={<History size={18} />} label="History" active={activeTab === 'history'} onClick={() => switchTab('history')} />
+          <SidebarItem icon={<Users size={18} />} label="Students" active={activeTab === 'students'} onClick={() => switchTab('students')} />
         </nav>
-        <button onClick={handleLogout} className="btn-secondary" style={{ width: '100%', marginTop: '20px' }}><LogOut size={18} /> Logout</button>
+        <button onClick={handleLogout} className="btn-secondary sidebar-logout"><LogOut size={18} /> Logout</button>
       </aside>
 
-      <main style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
+      <main className="dashboard-main">
         <AnimatePresence mode="wait">
           {!loading && (
             <div key="content">
@@ -331,7 +340,7 @@ const TeacherDashboard = () => {
                   {/* Live Course Stats */}
                   {courseStats.highest.length > 0 && (
                     <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid var(--glass-border)' }}>
-                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
+                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '24px', marginBottom: '32px' }}>
                           <div>
                              <h4 style={{ color: 'var(--success)', marginBottom: '12px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}><Trophy size={14}/> HIGHEST ATTENDANCE</h4>
                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>

@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Users, UserPlus, LogOut, LayoutDashboard, Settings, Shield, 
   BookOpen, CreditCard, Search, Trash2, Edit3, Filter, 
-  MoreVertical, Upload, FileText, Plus, X, Check, AlertTriangle, Book, Landmark, Bookmark, Bell, DollarSign, Megaphone, Loader2, TrendingUp, ArrowUpRight
+  MoreVertical, Upload, FileText, Plus, X, Check, AlertTriangle, Book, Landmark, Bookmark, Bell, DollarSign, Megaphone, Loader2, TrendingUp, ArrowUpRight, Menu
 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -23,6 +23,9 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true)
   const [processing, setProcessing] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+
+  const switchTab = (tab: string) => { setActiveTab(tab); setSidebarOpen(false) }
   
   const [showImportModal, setShowImportModal] = useState(false)
   const [showCourseModal, setShowCourseModal] = useState(false)
@@ -158,25 +161,32 @@ const AdminDashboard = () => {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)' }}>
+    <div className="dashboard-layout">
       <ScreenLoader isLoading={processing} />
-      <aside className="glass-card" style={{ width: '280px', borderRadius: '0 32px 32px 0', padding: '32px 16px', display: 'flex', flexDirection: 'column', height: '100vh', position: 'sticky', top: 0, zIndex: 100 }}>
-        <div style={{ padding: '0 16px', marginBottom: '40px' }}><h2 className="neon-text" style={{ fontSize: '24px', fontWeight: '800' }}>RIMTIFY</h2><p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>ADMIN CONSOLE</p></div>
-        <nav style={{ flex: 1, overflowY: 'auto' }}>
-          <SidebarItem icon={<LayoutDashboard size={18} />} label="Overview" active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
-          <SidebarItem icon={<Users size={18} />} label="Users" active={activeTab === 'users'} onClick={() => setActiveTab('users')} />
-          <SidebarItem icon={<Book size={18} />} label="Courses" active={activeTab === 'courses'} onClick={() => setActiveTab('courses')} />
-          <SidebarItem icon={<Landmark size={18} />} label="Finance" active={activeTab === 'finance'} onClick={() => setActiveTab('finance')} />
-          <SidebarItem icon={<DollarSign size={18} />} label="Payroll" active={activeTab === 'payroll'} onClick={() => setActiveTab('payroll')} />
-          <SidebarItem icon={<Bookmark size={18} />} label="Library" active={activeTab === 'library'} onClick={() => setActiveTab('library')} />
-          <SidebarItem icon={<Megaphone size={18} />} label="Announce" active={activeTab === 'announce'} onClick={() => setActiveTab('announce')} />
-          <SidebarItem icon={<Upload size={18} />} label="Bulk Import" active={activeTab === 'import'} onClick={() => setActiveTab('import')} />
+
+      <button className="mobile-menu-toggle" onClick={() => setSidebarOpen(!sidebarOpen)}>
+        {sidebarOpen ? <X size={22} /> : <Menu size={22} />}
+      </button>
+
+      {sidebarOpen && <div className="mobile-sidebar-overlay" onClick={() => setSidebarOpen(false)} />}
+
+      <aside className={`glass-card dashboard-sidebar ${sidebarOpen ? 'open' : ''}`}>
+        <div className="sidebar-brand"><h2 className="neon-text" style={{ fontSize: '24px', fontWeight: '800' }}>RIMTIFY</h2><p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>ADMIN CONSOLE</p></div>
+        <nav className="sidebar-nav">
+          <SidebarItem icon={<LayoutDashboard size={18} />} label="Overview" active={activeTab === 'overview'} onClick={() => switchTab('overview')} />
+          <SidebarItem icon={<Users size={18} />} label="Users" active={activeTab === 'users'} onClick={() => switchTab('users')} />
+          <SidebarItem icon={<Book size={18} />} label="Courses" active={activeTab === 'courses'} onClick={() => switchTab('courses')} />
+          <SidebarItem icon={<Landmark size={18} />} label="Finance" active={activeTab === 'finance'} onClick={() => switchTab('finance')} />
+          <SidebarItem icon={<DollarSign size={18} />} label="Payroll" active={activeTab === 'payroll'} onClick={() => switchTab('payroll')} />
+          <SidebarItem icon={<Bookmark size={18} />} label="Library" active={activeTab === 'library'} onClick={() => switchTab('library')} />
+          <SidebarItem icon={<Megaphone size={18} />} label="Announce" active={activeTab === 'announce'} onClick={() => switchTab('announce')} />
+          <SidebarItem icon={<Upload size={18} />} label="Bulk Import" active={activeTab === 'import'} onClick={() => switchTab('import')} />
         </nav>
-        <button onClick={handleLogout} className="btn-secondary" style={{ width: '100%', marginTop: '20px' }}><LogOut size={18} /> Logout</button>
+        <button onClick={handleLogout} className="btn-secondary sidebar-logout"><LogOut size={18} /> Logout</button>
       </aside>
 
-      <main style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
-        <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '40px' }}>
+      <main className="dashboard-main">
+        <header style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '40px', flexWrap: 'wrap', gap: '12px' }}>
           <div><h1 style={{ fontSize: '32px' }}>{activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}</h1><p style={{ color: 'var(--text-muted)' }}>University Command Center</p></div>
           <div className="glass-card" style={{ padding: '12px 24px' }}>{loading ? <Loader2 className="animate-spin" /> : <Shield size={20} color="var(--accent-cyan)" />}</div>
         </header>
@@ -191,7 +201,7 @@ const AdminDashboard = () => {
                   <StatCard label="Total Courses" value={stats.totalCourses} icon={<Book color="var(--accent-magenta)" />} color="var(--accent-magenta)" />
                </div>
 
-               <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '32px' }}>
+               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px' }}>
                   <div className="glass-card" style={{ padding: '32px' }}>
                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                         <h3>Recent Admissions</h3>

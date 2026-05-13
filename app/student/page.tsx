@@ -241,7 +241,7 @@ const StudentDashboard = () => {
         </AnimatePresence>
       </main>
 
-      <nav className="glass-card" style={{ position: 'fixed', bottom: '20px', left: '20px', right: '20px', height: '70px', borderRadius: '25px', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '0 20px', zIndex: 100 }}>
+      <nav className="glass-card student-bottom-nav" style={{ position: 'fixed', bottom: '20px', left: '20px', right: '20px', height: '70px', borderRadius: '25px', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '0 20px', zIndex: 100 }}>
         <NavItem icon={<PieChart size={22} />} active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
         <NavItem icon={<Book size={22} />} active={activeTab === 'courses'} onClick={() => setActiveTab('courses')} />
         <NavItem icon={<Trophy size={22} />} active={activeTab === 'results'} onClick={() => setActiveTab('results')} />

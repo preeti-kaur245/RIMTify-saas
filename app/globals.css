@@ -134,3 +134,200 @@ h1, h2, h3, h4 {
 .animate-spin {
   animation: spin 1s linear infinite;
 }
+
+/* ===== RESPONSIVE: MOBILE & TABLET ===== */
+
+/* Dashboard layout container */
+.dashboard-layout {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg-primary);
+}
+
+/* Desktop sidebar */
+.dashboard-sidebar {
+  width: 280px;
+  border-radius: 0 32px 32px 0;
+  padding: 32px 16px;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.sidebar-brand { padding: 0 16px; margin-bottom: 40px; }
+.sidebar-nav { flex: 1; overflow-y: auto; }
+.sidebar-logout { width: 100%; margin-top: 20px; }
+
+/* Mobile hamburger toggle */
+.mobile-menu-toggle {
+  display: none;
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 200;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: var(--bg-surface);
+  backdrop-filter: blur(12px);
+  color: white;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Main content area */
+.dashboard-main {
+  flex: 1;
+  padding: 40px;
+  overflow-y: auto;
+}
+
+/* Mobile overlay backdrop */
+.mobile-sidebar-overlay {
+  display: none;
+}
+
+/* Table wrapper for horizontal scroll */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.table-responsive table {
+  min-width: 600px;
+}
+
+/* ===== Breakpoint: Tablets (max-width: 1024px) ===== */
+@media (max-width: 1024px) {
+  .dashboard-sidebar {
+    width: 220px;
+    padding: 24px 12px;
+  }
+  .dashboard-main {
+    padding: 24px;
+  }
+}
+
+/* ===== Breakpoint: Mobile (max-width: 768px) ===== */
+@media (max-width: 768px) {
+  /* Show hamburger */
+  .mobile-menu-toggle {
+    display: flex;
+  }
+
+  /* Sidebar becomes a slide-out drawer */
+  .dashboard-sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 280px;
+    height: 100vh;
+    border-radius: 0 24px 24px 0;
+    padding: 72px 16px 32px;
+    z-index: 150;
+    transform: translateX(-100%);
+    transition: transform 0.3s ease;
+  }
+
+  .dashboard-sidebar.open {
+    transform: translateX(0);
+  }
+
+  .mobile-sidebar-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 140;
+    display: block;
+  }
+
+  /* Main content full width */
+  .dashboard-main {
+    padding: 72px 16px 24px;
+    width: 100%;
+  }
+
+  /* Reduce heading sizes */
+  .dashboard-main h1 {
+    font-size: 22px !important;
+  }
+  .dashboard-main h2 {
+    font-size: 20px !important;
+  }
+
+  /* Stack grids */
+  .dashboard-main .glass-card {
+    border-radius: 16px;
+  }
+
+  /* Buttons */
+  .btn-primary, .btn-secondary {
+    padding: 10px 18px;
+    font-size: 13px;
+  }
+
+  /* Input fields */
+  .input-field {
+    padding: 12px;
+    font-size: 14px;
+  }
+
+  /* Modal fixes */
+  .modal-overlay {
+    padding: 12px !important;
+  }
+  .modal-content {
+    max-width: 100% !important;
+    max-height: 90vh !important;
+    padding: 20px !important;
+    border-radius: 16px !important;
+  }
+
+  /* Glass cards padding */
+  .glass-card {
+    border-radius: 16px;
+  }
+
+  /* Student bottom nav */
+  .student-bottom-nav {
+    left: 8px !important;
+    right: 8px !important;
+    bottom: 12px !important;
+    height: 64px !important;
+    border-radius: 20px !important;
+    padding: 0 8px !important;
+  }
+}
+
+/* ===== Breakpoint: Small phones (max-width: 480px) ===== */
+@media (max-width: 480px) {
+  .dashboard-main {
+    padding: 68px 12px 16px;
+  }
+
+  .dashboard-main h1 {
+    font-size: 20px !important;
+  }
+
+  .glass-card {
+    border-radius: 12px;
+  }
+
+  .btn-primary, .btn-secondary {
+    padding: 8px 14px;
+    font-size: 12px;
+    border-radius: 30px;
+  }
+
+  .input-field {
+    padding: 10px;
+    font-size: 13px;
+    border-radius: 10px;
+  }
+}
