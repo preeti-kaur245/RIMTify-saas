@@ -40,6 +40,8 @@ const AdminDashboard = () => {
   const [showFeeModal, setShowFeeModal] = useState(false)
   const [showAnnounceModal, setShowAnnounceModal] = useState(false)
   const [showPayrollModal, setShowPayrollModal] = useState(false)
+  const [showSubjectModal, setShowSubjectModal] = useState(false)
+  const [showAssignmentModal, setShowAssignmentModal] = useState(false)
 
   const [importType, setImportType] = useState<'student' | 'teacher' | 'enrollment'>('student')
   const [csvData, setCsvData] = useState('')
@@ -48,6 +50,8 @@ const AdminDashboard = () => {
   const [feeForm, setFeeForm] = useState({ student_id: '', title: '', amount: '', due_date: '' })
   const [announceForm, setAnnounceForm] = useState({ title: '', message: '', type: 'general', target_role: 'all' })
   const [payrollForm, setPayrollForm] = useState({ teacher_id: '', month: 'May', year: 2026, base_salary: '', bonus: '0', deductions: '0' })
+  const [subjectForm, setSubjectForm] = useState({ name: '', code: '', semester_id: '', type: 'core' })
+  const [assignmentForm, setAssignmentForm] = useState({ teacher_id: '', subject_id: '', section_id: '' })
 
   const router = useRouter()
   const supabase = createClient()
@@ -186,6 +190,22 @@ const AdminDashboard = () => {
     } 
   }
 
+  const handleAddSubject = async () => {
+    setProcessing(true)
+    await supabase.from('subjects').insert([subjectForm])
+    setShowSubjectModal(false)
+    await fetchData()
+    setProcessing(false)
+  }
+
+  const handleAssignFaculty = async () => {
+    setProcessing(true)
+    await supabase.from('faculty_assignments').insert([assignmentForm])
+    setShowAssignmentModal(false)
+    await fetchData()
+    setProcessing(false)
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex' }}>
       <ScreenLoader isLoading={processing} />
@@ -319,6 +339,30 @@ const AdminDashboard = () => {
                  <div className="glass-card" style={{ padding: '24px', borderTop: '4px solid var(--accent-magenta)' }}>
                     <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}><Clock size={20} color="var(--accent-magenta)" /> Semesters & Sections</h3>
                     {semesters.length > 0 ? semesters.map(s => <p key={s.id} style={{ padding: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>Semester {s.term_number} ({s.academic_year})</p>) : <p style={{ color: 'var(--text-muted)' }}>No semesters found</p>}
+                 </div>
+                 <div className="glass-card" style={{ padding: '24px', borderTop: '4px solid var(--accent-cyan)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                      <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Book size={20} color="var(--accent-cyan)" /> Subjects</h3>
+                      <button onClick={() => setShowSubjectModal(true)} style={{ background: 'none', border: 'none', color: 'var(--accent-cyan)', cursor: 'pointer' }}><Plus size={16} /></button>
+                    </div>
+                    {subjects.length > 0 ? subjects.map(s => (
+                      <div key={s.id} style={{ padding: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between' }}>
+                        <span>{s.name} ({s.code})</span>
+                        <button onClick={() => handleDelete('subjects', s.id)} style={{ color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={12} /></button>
+                      </div>
+                    )) : <p style={{ color: 'var(--text-muted)' }}>No subjects found</p>}
+                 </div>
+                 <div className="glass-card" style={{ padding: '24px', borderTop: '4px solid var(--accent-purple)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                      <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Shield size={20} color="var(--accent-purple)" /> Assignments</h3>
+                      <button onClick={() => setShowAssignmentModal(true)} style={{ background: 'none', border: 'none', color: 'var(--accent-purple)', cursor: 'pointer' }}><Plus size={16} /></button>
+                    </div>
+                    {facultyAssignments.length > 0 ? facultyAssignments.map(a => (
+                      <div key={a.id} style={{ padding: '8px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', fontSize: '12px' }}>
+                        <span>{a.profiles?.name} → {a.subjects?.name} ({a.sections?.name})</span>
+                        <button onClick={() => handleDelete('faculty_assignments', a.id)} style={{ color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={12} /></button>
+                      </div>
+                    )) : <p style={{ color: 'var(--text-muted)' }}>No assignments found</p>}
                  </div>
               </div>
             </motion.div>
@@ -562,6 +606,51 @@ const AdminDashboard = () => {
             </div>
             <textarea className="input-field" rows={8} style={{ marginBottom: '24px', fontFamily: 'monospace' }} value={csvData} onChange={e => setCsvData(e.target.value)} placeholder="name, roll_no, department" />
             <LoadingButton onClick={handleBulkImport} loading={processing} style={{ width: '100%' }}>Execute Bulk Action</LoadingButton>
+          </motion.div>
+        </div>
+      {showSubjectModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <h3>Add New Subject</h3>
+              <button onClick={() => setShowSubjectModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+            <input className="input-field" placeholder="Subject Name" value={subjectForm.name} onChange={e => setSubjectForm({...subjectForm, name: e.target.value})} style={{ marginBottom: '16px' }} />
+            <input className="input-field" placeholder="Subject Code" value={subjectForm.code} onChange={e => setSubjectForm({...subjectForm, code: e.target.value})} style={{ marginBottom: '16px' }} />
+            <select className="input-field" value={subjectForm.semester_id} onChange={e => setSubjectForm({...subjectForm, semester_id: e.target.value})} style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }}>
+              <option value="">Select Semester</option>
+              {semesters.map(s => <option key={s.id} value={s.id} style={{background: '#1a1a1a'}}>Semester {s.term_number} ({s.academic_year})</option>)}
+            </select>
+            <select className="input-field" value={subjectForm.type} onChange={e => setSubjectForm({...subjectForm, type: e.target.value})} style={{ marginBottom: '24px', background: 'rgba(255,255,255,0.05)' }}>
+              <option value="core">Core</option>
+              <option value="elective">Elective</option>
+              <option value="lab">Lab</option>
+            </select>
+            <LoadingButton onClick={handleAddSubject} loading={processing} style={{ width: '100%' }}>Create Subject</LoadingButton>
+          </motion.div>
+        </div>
+      )}
+
+      {showAssignmentModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <h3>Assign Faculty</h3>
+              <button onClick={() => setShowAssignmentModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+            <select className="input-field" value={assignmentForm.teacher_id} onChange={e => setAssignmentForm({...assignmentForm, teacher_id: e.target.value})} style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }}>
+              <option value="">Select Teacher</option>
+              {users.filter(u => u.role === 'teacher').map(t => <option key={t.id} value={t.id} style={{background: '#1a1a1a'}}>{t.name}</option>)}
+            </select>
+            <select className="input-field" value={assignmentForm.subject_id} onChange={e => setAssignmentForm({...assignmentForm, subject_id: e.target.value})} style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }}>
+              <option value="">Select Subject</option>
+              {subjects.map(s => <option key={s.id} value={s.id} style={{background: '#1a1a1a'}}>{s.name} ({s.code})</option>)}
+            </select>
+            <select className="input-field" value={assignmentForm.section_id} onChange={e => setAssignmentForm({...assignmentForm, section_id: e.target.value})} style={{ marginBottom: '24px', background: 'rgba(255,255,255,0.05)' }}>
+              <option value="">Select Section</option>
+              {sections.map(s => <option key={s.id} value={s.id} style={{background: '#1a1a1a'}}>{s.name}</option>)}
+            </select>
+            <LoadingButton onClick={handleAssignFaculty} loading={processing} style={{ width: '100%' }}>Confirm Assignment</LoadingButton>
           </motion.div>
         </div>
       )}
