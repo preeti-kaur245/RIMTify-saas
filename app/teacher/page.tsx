@@ -9,6 +9,8 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
+import ScreenLoader from '@/components/ScreenLoader'
+import LoadingButton from '@/components/LoadingButton'
 
 const TeacherDashboard = () => {
   const [activeTab, setActiveTab] = useState('attendance')
@@ -19,6 +21,9 @@ const TeacherDashboard = () => {
   
   const [students, setStudents] = useState<any[]>([])
   const [attendanceRecords, setAttendanceRecords] = useState<Record<string, 'present' | 'absent' | null>>({})
+  const [courseStats, setCourseStats] = useState<{highest: any[], lowest: any[], all: any[]}>({highest: [], lowest: [], all: []})
+  const [selectedStudent, setSelectedStudent] = useState<any>(null)
+  const [studentStats, setStudentStats] = useState<any>({ attendance: [], grades: [] })
   const [gradeRecords, setGradeRecords] = useState<Record<string, { marks: string, remarks: string }>>({})
   const [examType, setExamType] = useState('internal')
   const [announcements, setAnnouncements] = useState<any[]>([])
@@ -55,6 +60,12 @@ const TeacherDashboard = () => {
     }
     init()
   }, [])
+
+  useEffect(() => {
+    if (selectedCourse && students.length > 0) {
+      fetchCourseStats(selectedCourse.name)
+    }
+  }, [selectedCourse, students])
 
   const fetchInitialData = async () => {
     const { data: user } = await supabase.auth.getUser()
@@ -101,6 +112,73 @@ const TeacherDashboard = () => {
     if (data) setMaterials(data)
   }
 
+  const fetchCourseStats = async (subjectName: string) => {
+    const { data } = await supabase.from('attendance').select('student_id, status').eq('subject', subjectName)
+    if (data && students.length > 0) {
+      const counts: Record<string, {present: number, total: number}> = {}
+      students.forEach(s => counts[s.id] = { present: 0, total: 0 })
+      
+      data.forEach(r => {
+        if (counts[r.student_id]) {
+          counts[r.student_id].total++
+          if (r.status === 'present') counts[r.student_id].present++
+        }
+      })
+      
+      const statsArray = students.map(s => {
+        const c = counts[s.id] || { present: 0, total: 0 }
+        const percentage = c.total === 0 ? 0 : Math.round((c.present / c.total) * 100)
+        return { ...s, percentage, total: c.total }
+      }).filter(s => s.total > 0)
+      
+      statsArray.sort((a, b) => b.percentage - a.percentage)
+      
+      setCourseStats({
+        all: statsArray,
+        highest: statsArray.slice(0, 3),
+        lowest: [...statsArray].reverse().slice(0, 3)
+      })
+    } else {
+      setCourseStats({highest: [], lowest: [], all: []})
+    }
+  }
+
+  const loadHistorySession = async (h: any) => {
+    setLoading(true)
+    setSelectedDate(h.date)
+    setSelectedSession(h.session_no)
+    setActiveTab('attendance')
+    
+    const { data: user } = await supabase.auth.getUser()
+    if (user?.user) {
+       const { data: records } = await supabase.from('attendance')
+          .select('*')
+          .eq('teacher_id', user.user.id)
+          .eq('date', h.date)
+          .eq('session_no', h.session_no)
+          
+       if (records && records.length > 0) {
+          const courseName = records[0].subject
+          const matchedCourse = courses.find(c => c.name === courseName)
+          if (matchedCourse) setSelectedCourse(matchedCourse)
+          
+          const mappedAttendance: Record<string, 'present' | 'absent'> = {}
+          records.forEach(r => {
+             mappedAttendance[r.student_id] = r.status
+          })
+          setAttendanceRecords(mappedAttendance)
+       }
+    }
+    setLoading(false)
+  }
+
+  const openStudentProfile = async (student: any) => {
+    setSelectedStudent(student)
+    const { data: attendance } = await supabase.from('attendance').select('*').eq('student_id', student.id)
+    const { data: grades } = await supabase.from('grades').select('*, courses(name)').eq('student_id', student.id)
+    setStudentStats({ attendance: attendance || [], grades: grades || [] })
+  }
+
   const handleSaveAttendance = async () => {
     setSaving(true)
     const { data: user } = await supabase.auth.getUser()
@@ -115,17 +193,24 @@ const TeacherDashboard = () => {
       status: attendanceRecords[s.id] || 'present'
     }))
     
+    // Delete existing records to allow seamless updates/editing
+    await supabase.from('attendance')
+      .delete()
+      .match({ teacher_id: user.user.id, subject: selectedCourse.name, date: selectedDate, session_no: selectedSession })
+      
     await supabase.from('attendance').insert(records)
     setMessage({ text: 'Attendance saved successfully', type: 'success' })
     fetchInitialData()
+    if (selectedCourse) fetchCourseStats(selectedCourse.name)
     setSaving(false)
     setTimeout(() => setMessage({ text: '', type: '' }), 3000)
   }
 
   const handleUploadMaterial = async () => {
     if (!materialForm.title || !materialForm.file_url || !selectedCourse) return
+    setSaving(true)
     const { data: user } = await supabase.auth.getUser()
-    if (!user?.user) return
+    if (!user?.user) { setSaving(false); return; }
 
     await supabase.from('materials').insert([{
       teacher_id: user.user.id,
@@ -135,7 +220,8 @@ const TeacherDashboard = () => {
       file_type: materialForm.file_type
     }])
     setMaterialForm({ title: '', file_url: '', file_type: 'pdf' })
-    fetchMaterials()
+    await fetchMaterials()
+    setSaving(false)
   }
 
   const handleSaveGrades = async () => {
@@ -170,10 +256,17 @@ const TeacherDashboard = () => {
     setTimeout(() => setMessage({ text: '', type: '' }), 3000)
   }
 
-  const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); }
+  const handleLogout = async () => { 
+    setSaving(true)
+    await supabase.auth.signOut(); 
+    router.push('/login'); 
+    setSaving(false)
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex' }}>
+      <ScreenLoader isLoading={loading} message="Fetching latest data..." />
+      <ScreenLoader isLoading={saving} message="Saving changes..." />
       
       <aside className="glass-card" style={{ width: '280px', borderRadius: '0 32px 32px 0', padding: '32px 16px', display: 'flex', flexDirection: 'column', height: '100vh', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ padding: '0 16px', marginBottom: '40px' }}><h2 className="neon-text" style={{ fontSize: '24px', fontWeight: '800' }}>FACULTY</h2></div>
@@ -191,21 +284,7 @@ const TeacherDashboard = () => {
 
       <main style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
         <AnimatePresence mode="wait">
-          {loading ? (
-             <motion.div 
-               key="loader"
-               initial={{ opacity: 0 }} 
-               animate={{ opacity: 1 }} 
-               exit={{ opacity: 0 }}
-               style={{ display: 'flex', height: '60vh', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '20px' }}
-             >
-                <div style={{ position: 'relative' }}>
-                   <div className="animate-spin" style={{ width: '60px', height: '60px', border: '4px solid rgba(139, 92, 246, 0.1)', borderTop: '4px solid var(--accent-purple)', borderRadius: '50%' }}></div>
-                   <div className="animate-spin" style={{ position: 'absolute', top: '10px', left: '10px', width: '40px', height: '40px', border: '4px solid rgba(6, 182, 212, 0.1)', borderTop: '4px solid var(--accent-cyan)', borderRadius: '50%', animationDirection: 'reverse' }}></div>
-                </div>
-                <p style={{ color: 'var(--text-muted)', fontSize: '14px', letterSpacing: '2px' }}>LOADING DATA</p>
-             </motion.div>
-          ) : (
+          {!loading && (
             <div key="content">
           {activeTab === 'attendance' && (
              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
@@ -248,12 +327,62 @@ const TeacherDashboard = () => {
                       </select>
                     </div>
                   </div>
+                  
+                  {/* Live Course Stats */}
+                  {courseStats.highest.length > 0 && (
+                    <div style={{ marginTop: '32px', paddingTop: '24px', borderTop: '1px solid var(--glass-border)' }}>
+                       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '32px' }}>
+                          <div>
+                             <h4 style={{ color: 'var(--success)', marginBottom: '12px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}><Trophy size={14}/> HIGHEST ATTENDANCE</h4>
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {courseStats.highest.map((s, i) => (
+                                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', background: 'rgba(255,255,255,0.02)', padding: '8px 12px', borderRadius: '8px' }}>
+                                      <span>{s.name} <span style={{color: 'var(--text-muted)', fontSize: '11px'}}>({s.roll_no})</span></span>
+                                      <span style={{ fontWeight: '600', color: 'var(--success)' }}>{s.percentage}%</span>
+                                   </div>
+                                ))}
+                             </div>
+                          </div>
+                          <div>
+                             <h4 style={{ color: 'var(--error)', marginBottom: '12px', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '6px' }}><AlertCircle size={14}/> LOWEST ATTENDANCE</h4>
+                             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                {courseStats.lowest.map((s, i) => (
+                                   <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', background: 'rgba(255,255,255,0.02)', padding: '8px 12px', borderRadius: '8px' }}>
+                                      <span>{s.name} <span style={{color: 'var(--text-muted)', fontSize: '11px'}}>({s.roll_no})</span></span>
+                                      <span style={{ fontWeight: '600', color: 'var(--error)' }}>{s.percentage}%</span>
+                                   </div>
+                                ))}
+                             </div>
+                          </div>
+                       </div>
+                       
+                       <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Book size={18} color="var(--accent-cyan)" /> Class Distribution Chart
+                       </h3>
+                       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '250px', overflowY: 'auto', paddingRight: '8px' }}>
+                         {courseStats.all.map((s, i) => (
+                            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '16px', fontSize: '13px' }}>
+                               <span style={{ width: '140px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer', textDecoration: 'underline', textDecorationColor: 'var(--text-muted)' }} onClick={() => openStudentProfile(s)}>{s.name}</span>
+                               <div style={{ flex: 1, height: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', overflow: 'hidden', position: 'relative' }}>
+                                  <motion.div 
+                                    initial={{ width: 0 }} 
+                                    animate={{ width: `${s.percentage}%` }} 
+                                    transition={{ duration: 1, delay: i * 0.05, ease: "easeOut" }}
+                                    style={{ height: '100%', background: s.percentage >= 75 ? 'linear-gradient(90deg, #10B981, #059669)' : s.percentage >= 50 ? 'linear-gradient(90deg, #06B6D4, #0891B2)' : 'linear-gradient(90deg, #EF4444, #B91C1C)', borderRadius: '6px' }}
+                                  />
+                               </div>
+                               <span style={{ width: '40px', textAlign: 'right', fontWeight: '700' }}>{s.percentage}%</span>
+                            </div>
+                         ))}
+                       </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="glass-card" style={{ padding: '32px', overflow: 'hidden' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
                      <h3>Student Roster ({students.length})</h3>
-                     <button className="btn-primary" onClick={handleSaveAttendance} disabled={saving}>{saving ? 'Saving...' : 'Save Attendance'}</button>
+                     <LoadingButton onClick={handleSaveAttendance} loading={saving}>Save Attendance</LoadingButton>
                   </div>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                      <thead style={{ background: 'rgba(255,255,255,0.02)' }}>
@@ -296,7 +425,7 @@ const TeacherDashboard = () => {
                      <option value="note" style={{background: '#1a1a1a'}}>Text Note</option>
                      <option value="link" style={{background: '#1a1a1a'}}>External Link</option>
                    </select>
-                   <button className="btn-primary" onClick={handleUploadMaterial}><Upload size={18} /> Upload</button>
+                   <LoadingButton onClick={handleUploadMaterial} loading={saving}><Upload size={18} /> Upload</LoadingButton>
                  </div>
                </div>
 
@@ -359,7 +488,7 @@ const TeacherDashboard = () => {
                </div>
                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
                  {history.map((h, i) => (
-                    <div key={i} className="glass-card" style={{ padding: '24px', transition: '0.3s', cursor: 'pointer' }}>
+                    <div key={i} className="glass-card" style={{ padding: '24px', transition: '0.3s', cursor: 'pointer' }} onClick={() => loadHistorySession(h)}>
                        <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
                           <div style={{ width: '48px', height: '48px', background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(6, 182, 212, 0.2))', borderRadius: '16px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                              <Calendar size={22} color="var(--accent-cyan)" />
@@ -406,7 +535,7 @@ const TeacherDashboard = () => {
                             <tr key={s.id} style={{ borderTop: '1px solid var(--glass-border)' }}>
                                <td style={{ padding: '16px 24px' }}><div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}><div style={{ width: '32px', height: '32px', background: 'var(--accent-purple)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px' }}>{s.name?.charAt(0)}</div> {s.name}</div></td>
                                <td style={{ padding: '16px 24px', color: 'var(--text-secondary)' }}>{s.roll_no}</td>
-                               <td style={{ padding: '16px 24px', textAlign: 'right' }}><button className="btn-secondary" style={{ padding: '6px 12px', fontSize: '12px' }}>Profile</button></td>
+                               <td style={{ padding: '16px 24px', textAlign: 'right' }}><button className="btn-secondary" onClick={() => openStudentProfile(s)} style={{ padding: '6px 12px', fontSize: '12px' }}>Profile</button></td>
                             </tr>
                          )) : (
                             <tr><td colSpan={3} style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>No students found in the database.</td></tr>
@@ -427,7 +556,10 @@ const TeacherDashboard = () => {
                          <option value="midterm">Midterm</option>
                          <option value="final">Final Exam</option>
                       </select>
-                      <button className="btn-primary" onClick={handleSaveGrades} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>{saving ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />} Save All</button>
+                                             <LoadingButton onClick={handleSaveGrades} loading={saving}>
+                         <Save size={18} /> Save All
+                       </LoadingButton>
+
                    </div>
                 </div>
                 <div className="glass-card" style={{ overflow: 'hidden' }}>
@@ -478,6 +610,68 @@ const TeacherDashboard = () => {
           )}
         </AnimatePresence>
       </main>
+
+      {/* Student Profile Modal */}
+      <AnimatePresence>
+        {selectedStudent && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="glass-card" style={{ width: '100%', maxWidth: '600px', maxHeight: '80vh', overflowY: 'auto', padding: '32px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+                 <div>
+                    <h2 style={{ fontSize: '24px' }}>{selectedStudent.name}</h2>
+                    <p style={{ color: 'var(--accent-cyan)', fontWeight: '600' }}>{selectedStudent.roll_no}</p>
+                 </div>
+                 <button onClick={() => setSelectedStudent(null)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer', alignSelf: 'flex-start' }}><X size={24} /></button>
+              </div>
+
+              <div style={{ marginBottom: '32px' }}>
+                 <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><CheckCircle size={18} color="var(--accent-purple)" /> Attendance Performance</h3>
+                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {studentStats.attendance.length > 0 ? (
+                       Object.entries(studentStats.attendance.reduce((acc: any, curr: any) => {
+                          if (!acc[curr.subject]) acc[curr.subject] = { present: 0, total: 0 }
+                          acc[curr.subject].total++
+                          if (curr.status === 'present') acc[curr.subject].present++
+                          return acc
+                       }, {})).map(([subject, stats]: any, i) => {
+                          const pct = Math.round((stats.present / stats.total) * 100)
+                          return (
+                             <div key={i} style={{ background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', fontSize: '14px' }}>
+                                   <span style={{ fontWeight: '600' }}>{subject}</span>
+                                   <span>{stats.present} / {stats.total} Sessions ({pct}%)</span>
+                                </div>
+                                <div style={{ width: '100%', height: '6px', background: 'rgba(255,255,255,0.05)', borderRadius: '3px', overflow: 'hidden' }}>
+                                   <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} style={{ height: '100%', background: pct >= 75 ? 'var(--success)' : pct >= 50 ? 'var(--accent-cyan)' : 'var(--error)' }} />
+                                </div>
+                             </div>
+                          )
+                       })
+                    ) : <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>No attendance records found.</p>}
+                 </div>
+              </div>
+
+              <div>
+                 <h3 style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><Trophy size={18} color="var(--accent-magenta)" /> Recent Grades</h3>
+                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {studentStats.grades.length > 0 ? studentStats.grades.map((g: any, i: number) => (
+                       <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '8px' }}>
+                          <div>
+                             <p style={{ fontWeight: '600', fontSize: '14px' }}>{g.courses?.name || 'Unknown Course'}</p>
+                             <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{g.exam_type.toUpperCase()}</p>
+                          </div>
+                          <div style={{ textAlign: 'right' }}>
+                             <p style={{ fontSize: '18px', fontWeight: '800', color: 'var(--accent-cyan)' }}>{g.marks}</p>
+                          </div>
+                       </div>
+                    )) : <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>No grades recorded yet.</p>}
+                 </div>
+              </div>
+
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }

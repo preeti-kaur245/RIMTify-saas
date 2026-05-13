@@ -8,6 +8,8 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
+import ScreenLoader from '@/components/ScreenLoader'
+import LoadingButton from '@/components/LoadingButton'
 
 const StudentDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview')
@@ -20,6 +22,7 @@ const StudentDashboard = () => {
   const [attendancePercentage, setAttendancePercentage] = useState(0)
   const [studentProfile, setStudentProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [isActionLoading, setIsActionLoading] = useState(false)
   
   const router = useRouter()
   const supabase = createClient()
@@ -75,12 +78,19 @@ const StudentDashboard = () => {
     setLoading(false)
   }
 
-  const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); }
+  const handleLogout = async () => { 
+    setIsActionLoading(true)
+    await supabase.auth.signOut(); 
+    router.push('/login'); 
+    setIsActionLoading(false)
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', paddingBottom: '100px' }}>
+      <ScreenLoader isLoading={loading} message="Loading your dashboard..." />
+      <ScreenLoader isLoading={isActionLoading} message="Signing out..." />
       <header style={{ padding: '32px 20px', textAlign: 'center', position: 'relative' }}>
-        <button onClick={handleLogout} style={{ position: 'absolute', top: '32px', right: '24px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><LogOut size={20} /></button>
+        <button onClick={handleLogout} style={{ position: 'absolute', top: '32px', right: '24px', background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }} disabled={isActionLoading}><LogOut size={20} /></button>
         <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-magenta))', margin: '0 auto 16px', border: '4px solid var(--bg-surface)', padding: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '32px', fontWeight: 'bold' }}>
            {studentProfile?.name ? studentProfile.name.charAt(0).toUpperCase() : 'S'}
         </div>

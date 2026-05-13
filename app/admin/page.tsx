@@ -9,6 +9,8 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
+import LoadingButton from '@/components/LoadingButton'
+import ScreenLoader from '@/components/ScreenLoader'
 
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview')
@@ -103,33 +105,61 @@ const AdminDashboard = () => {
   }
 
   const handleAddCourse = async () => {
+    setProcessing(true)
     await supabase.from('courses').insert([courseForm]);
-    setShowCourseModal(false); fetchData();
+    setShowCourseModal(false); 
+    await fetchData();
+    setProcessing(false)
   }
   const handleAddFee = async () => {
+    setProcessing(true)
     await supabase.from('fees').insert([{ ...feeForm, status: 'pending' }]);
-    setShowFeeModal(false); fetchData();
+    setShowFeeModal(false); 
+    await fetchData();
+    setProcessing(false)
   }
   const handleAddBook = async () => {
+    setProcessing(true)
     await supabase.from('books').insert([bookForm]);
-    setShowBookModal(false); fetchData();
+    setShowBookModal(false); 
+    await fetchData();
+    setProcessing(false)
   }
   const handleAddAnnounce = async () => {
+    setProcessing(true)
     await supabase.from('announcements').insert([announceForm]);
-    setShowAnnounceModal(false); fetchData();
+    setShowAnnounceModal(false); 
+    await fetchData();
+    setProcessing(false)
   }
   const handleAddPayroll = async () => {
+    setProcessing(true)
     const net = parseFloat(payrollForm.base_salary) + parseFloat(payrollForm.bonus) - parseFloat(payrollForm.deductions);
     await supabase.from('payroll').insert([{ ...payrollForm, net_salary: net, status: 'pending' }]);
-    setShowPayrollModal(false); fetchData();
+    setShowPayrollModal(false); 
+    await fetchData();
+    setProcessing(false)
   }
 
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); }
-  const handleMarkFeePaid = async (id: any) => { await supabase.from('fees').update({ status: 'paid', payment_date: new Date().toISOString() }).eq('id', id); fetchData(); }
-  const handleDelete = async (table: string, id: any) => { if(confirm('Delete record?')) { await supabase.from(table).delete().eq('id', id); fetchData(); } }
+  const handleMarkFeePaid = async (id: any) => { 
+    setProcessing(true)
+    await supabase.from('fees').update({ status: 'paid', payment_date: new Date().toISOString() }).eq('id', id); 
+    await fetchData(); 
+    setProcessing(false)
+  }
+  const handleDelete = async (table: string, id: any) => { 
+    if(confirm('Delete record?')) { 
+      setProcessing(true)
+      await supabase.from(table).delete().eq('id', id); 
+      await fetchData(); 
+      setProcessing(false)
+    } 
+  }
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-primary)' }}>
+      <ScreenLoader isLoading={processing} />
       <aside className="glass-card" style={{ width: '280px', borderRadius: '0 32px 32px 0', padding: '32px 16px', display: 'flex', flexDirection: 'column', height: '100vh', position: 'sticky', top: 0, zIndex: 100 }}>
         <div style={{ padding: '0 16px', marginBottom: '40px' }}><h2 className="neon-text" style={{ fontSize: '24px', fontWeight: '800' }}>RIMTIFY</h2><p style={{ color: 'var(--text-muted)', fontSize: '12px' }}>ADMIN CONSOLE</p></div>
         <nav style={{ flex: 1, overflowY: 'auto' }}>
@@ -252,7 +282,15 @@ const AdminDashboard = () => {
                         <td style={{ padding: '16px 24px' }}>${f.amount}</td>
                         <td style={{ padding: '16px 24px' }}><span style={{ color: f.status === 'paid' ? 'var(--success)' : 'var(--error)' }}>{f.status.toUpperCase()}</span></td>
                         <td style={{ padding: '16px 24px' }}>
-                          {f.status === 'pending' && <button onClick={() => handleMarkFeePaid(f.id)} className="btn-secondary">Mark Paid</button>}
+                          {f.status === 'pending' && (
+                            <LoadingButton 
+                              onClick={() => handleMarkFeePaid(f.id)} 
+                              variant="secondary"
+                              style={{ padding: '4px 12px', fontSize: '12px' }}
+                            >
+                              Mark Paid
+                            </LoadingButton>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -340,7 +378,7 @@ const AdminDashboard = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}><h3>Add Course</h3><button onClick={() => setShowCourseModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button></div>
             <input className="input-field" placeholder="Course Name" value={courseForm.name} onChange={e => setCourseForm({...courseForm, name: e.target.value})} style={{ marginBottom: '16px' }} />
             <input className="input-field" placeholder="Course Code" value={courseForm.code} onChange={e => setCourseForm({...courseForm, code: e.target.value})} style={{ marginBottom: '16px' }} />
-            <button onClick={handleAddCourse} className="btn-primary" style={{ width: '100%' }}>Save Course</button>
+            <LoadingButton onClick={handleAddCourse} loading={processing} style={{ width: '100%' }}>Save Course</LoadingButton>
           </motion.div>
         </div>
       )}
@@ -356,7 +394,7 @@ const AdminDashboard = () => {
             <input className="input-field" placeholder="Fee Title (e.g. Tuition)" value={feeForm.title} onChange={e => setFeeForm({...feeForm, title: e.target.value})} style={{ marginBottom: '16px' }} />
             <input type="number" className="input-field" placeholder="Amount" value={feeForm.amount} onChange={e => setFeeForm({...feeForm, amount: e.target.value})} style={{ marginBottom: '16px' }} />
             <input type="date" className="input-field" value={feeForm.due_date} onChange={e => setFeeForm({...feeForm, due_date: e.target.value})} style={{ marginBottom: '16px' }} />
-            <button onClick={handleAddFee} className="btn-primary" style={{ width: '100%' }}>Assign Fee</button>
+            <LoadingButton onClick={handleAddFee} loading={processing} style={{ width: '100%' }}>Assign Fee</LoadingButton>
           </motion.div>
         </div>
       )}
@@ -368,7 +406,7 @@ const AdminDashboard = () => {
             <input className="input-field" placeholder="Book Title" value={bookForm.title} onChange={e => setBookForm({...bookForm, title: e.target.value})} style={{ marginBottom: '16px' }} />
             <input className="input-field" placeholder="Author" value={bookForm.author} onChange={e => setBookForm({...bookForm, author: e.target.value})} style={{ marginBottom: '16px' }} />
             <input type="number" className="input-field" placeholder="Total Copies" value={bookForm.total_copies} onChange={e => setBookForm({...bookForm, total_copies: parseInt(e.target.value)})} style={{ marginBottom: '16px' }} />
-            <button onClick={handleAddBook} className="btn-primary" style={{ width: '100%' }}>Save Book</button>
+            <LoadingButton onClick={handleAddBook} loading={processing} style={{ width: '100%' }}>Save Book</LoadingButton>
           </motion.div>
         </div>
       )}
@@ -389,7 +427,7 @@ const AdminDashboard = () => {
               <option value="student" style={{background: '#1a1a1a'}}>Students Only</option>
               <option value="teacher" style={{background: '#1a1a1a'}}>Teachers Only</option>
             </select>
-            <button onClick={handleAddAnnounce} className="btn-primary" style={{ width: '100%' }}>Broadcast</button>
+            <LoadingButton onClick={handleAddAnnounce} loading={processing} style={{ width: '100%' }}>Broadcast</LoadingButton>
           </motion.div>
         </div>
       )}
@@ -404,7 +442,7 @@ const AdminDashboard = () => {
             </select>
             <input type="number" className="input-field" placeholder="Base Salary" value={payrollForm.base_salary} onChange={e => setPayrollForm({...payrollForm, base_salary: e.target.value})} style={{ marginBottom: '16px' }} />
             <input type="number" className="input-field" placeholder="Bonus" value={payrollForm.bonus} onChange={e => setPayrollForm({...payrollForm, bonus: e.target.value})} style={{ marginBottom: '16px' }} />
-            <button onClick={handleAddPayroll} className="btn-primary" style={{ width: '100%' }}>Save Record</button>
+            <LoadingButton onClick={handleAddPayroll} loading={processing} style={{ width: '100%' }}>Save Record</LoadingButton>
           </motion.div>
         </div>
       )}
@@ -416,7 +454,7 @@ const AdminDashboard = () => {
               <button onClick={() => setShowImportModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button>
             </div>
             <textarea className="input-field" rows={8} style={{ marginBottom: '24px', fontFamily: 'monospace' }} value={csvData} onChange={e => setCsvData(e.target.value)} placeholder="name, roll_no, department" />
-            <button onClick={handleBulkImport} className="btn-primary" style={{ width: '100%' }} disabled={processing}>{processing ? 'Processing...' : 'Execute Bulk Action'}</button>
+            <LoadingButton onClick={handleBulkImport} loading={processing} style={{ width: '100%' }}>Execute Bulk Action</LoadingButton>
           </motion.div>
         </div>
       )}
