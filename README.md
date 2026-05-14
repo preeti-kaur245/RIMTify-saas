@@ -1,6 +1,6 @@
 Rimtify is a modern, full-stack web application that streamlines university operations by providing specialized dashboards for administrators, teachers, and students. Built with Next.js, Supabase, and Framer Motion, it delivers a seamless, real-time experience for managing academic workflows.
 
-https://github.com/preeti-kaur245/RIMTify-saas/
+https://preeti-kaur245.github.io/RIMTify-saas/
 
 Key Features
 ------------For Administrators---------
