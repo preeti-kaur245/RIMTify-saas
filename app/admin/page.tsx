@@ -338,6 +338,23 @@ const AdminDashboard = () => {
     } 
   }
 
+  const [curriculumState, setCurriculumState] = useState({ programId: '', semesterId: '', sectionId: '', subjectId: '' })
+  
+  const filteredSemesters = semesters.filter(s => s.program_id === curriculumState.programId)
+  const filteredSections = sections.filter(s => s.semester_id === curriculumState.semesterId)
+  const currentSubjects = subjectAllocations.filter(a => a.section_id === curriculumState.sectionId)
+
+  const handleAllocateSubject = async () => {
+    if (!curriculumState.sectionId || !curriculumState.subjectId) return
+    setProcessing(true)
+    await supabase.from('section_subject_allocations').upsert({
+      section_id: curriculumState.sectionId,
+      subject_id: curriculumState.subjectId
+    })
+    await fetchData()
+    setProcessing(false)
+  }
+
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary)', display: 'flex' }}>
       <ScreenLoader isLoading={processing} />
@@ -364,7 +381,8 @@ const AdminDashboard = () => {
         <nav style={{ flex: 1, overflowY: 'auto' }}>
           <SidebarItem icon={<LayoutDashboard size={18} />} label="Overview" active={activeTab === 'overview'} onClick={() => { setActiveTab('overview'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<Users size={18} />} label="User Management" active={activeTab === 'users'} onClick={() => { setActiveTab('users'); setIsSidebarOpen(false); }} />
-          <SidebarItem icon={<BookOpen size={18} />} label="Academic Structure" active={activeTab === 'hierarchy'} onClick={() => { setActiveTab('hierarchy'); setIsSidebarOpen(false); }} />
+          <SidebarItem icon={<BookOpen size={18} />} label="Curriculum Manager" active={activeTab === 'curriculum'} onClick={() => { setActiveTab('curriculum'); setIsSidebarOpen(false); }} />
+          <SidebarItem icon={<LayoutDashboard size={18} />} label="Academic Structure" active={activeTab === 'hierarchy'} onClick={() => { setActiveTab('hierarchy'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<Edit3 size={18} />} label="Subject Manager" active={activeTab === 'subjects'} onClick={() => { setActiveTab('subjects'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<Shield size={18} />} label="Faculty Assignment" active={activeTab === 'faculty'} onClick={() => { setActiveTab('faculty'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<ArrowUpRight size={18} />} label="Promotion Wizard" active={activeTab === 'promotion'} onClick={() => { setActiveTab('promotion'); setIsSidebarOpen(false); }} />
@@ -424,6 +442,98 @@ const AdminDashboard = () => {
                      </div>
                   </div>
                </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'curriculum' && (
+            <motion.div key="curriculum" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div style={{ marginBottom: '32px' }}>
+                <h2>Curriculum & Subject Mapping</h2>
+                <p style={{ color: 'var(--text-muted)' }}>Configure subject distributions for each course, semester, and section.</p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '32px' }} className="responsive-grid">
+                {/* Selector Section */}
+                <div className="glass-card" style={{ padding: '24px', height: 'fit-content' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                    <div>
+                      <label style={{ fontSize: '12px', color: 'var(--accent-purple)', fontWeight: '800', marginBottom: '8px', display: 'block' }}>1. SELECT PROGRAM</label>
+                      <select className="input-field" value={curriculumState.programId} onChange={e => setCurriculumState({ ...curriculumState, programId: e.target.value, semesterId: '', sectionId: '' })}>
+                        <option value="">Choose Program...</option>
+                        {programs.map(p => <option key={p.id} value={p.id} style={{background: '#1a1a1a'}}>{p.name}</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '12px', color: 'var(--accent-magenta)', fontWeight: '800', marginBottom: '8px', display: 'block' }}>2. SELECT SEMESTER</label>
+                      <select className="input-field" disabled={!curriculumState.programId} value={curriculumState.semesterId} onChange={e => setCurriculumState({ ...curriculumState, semesterId: e.target.value, sectionId: '' })}>
+                        <option value="">Choose Semester...</option>
+                        {filteredSemesters.map(s => <option key={s.id} value={s.id} style={{background: '#1a1a1a'}}>Semester {s.term_number}</option>)}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label style={{ fontSize: '12px', color: 'var(--accent-cyan)', fontWeight: '800', marginBottom: '8px', display: 'block' }}>3. SELECT SECTION</label>
+                      <select className="input-field" disabled={!curriculumState.semesterId} value={curriculumState.sectionId} onChange={e => setCurriculumState({ ...curriculumState, sectionId: e.target.value })}>
+                        <option value="">Choose Section...</option>
+                        {filteredSections.map(s => <option key={s.id} value={s.id} style={{background: '#1a1a1a'}}>Section {s.name}</option>)}
+                      </select>
+                    </div>
+
+                    <div style={{ marginTop: '20px', paddingTop: '20px', borderTop: '1px solid var(--glass-border)' }}>
+                      <label style={{ fontSize: '12px', color: 'var(--success)', fontWeight: '800', marginBottom: '8px', display: 'block' }}>4. ADD SUBJECT</label>
+                      <div style={{ display: 'flex', gap: '12px' }}>
+                        <select className="input-field" disabled={!curriculumState.sectionId} value={curriculumState.subjectId} onChange={e => setCurriculumState({ ...curriculumState, subjectId: e.target.value })}>
+                          <option value="">Choose Subject...</option>
+                          {subjects.map(s => <option key={s.id} value={s.id} style={{background: '#1a1a1a'}}>{s.name} ({s.code})</option>)}
+                        </select>
+                        <button className="btn-primary" disabled={!curriculumState.subjectId} onClick={handleAllocateSubject}><Plus size={20} /></button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Subjects List */}
+                <div className="glass-card" style={{ padding: '32px' }}>
+                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+                      <h3>Allocated Subjects</h3>
+                      {curriculumState.sectionId && <span style={{ padding: '4px 12px', background: 'rgba(6, 182, 212, 0.1)', color: 'var(--accent-cyan)', borderRadius: '100px', fontSize: '12px' }}>Active Section: {sections.find(s => s.id === curriculumState.sectionId)?.name}</span>}
+                   </div>
+                   
+                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
+                      {currentSubjects.map(alloc => (
+                        <motion.div 
+                          initial={{ opacity: 0, scale: 0.9 }} 
+                          animate={{ opacity: 1, scale: 1 }} 
+                          key={alloc.id} 
+                          className="glass-card" 
+                          style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', position: 'relative' }}
+                        >
+                          <p style={{ fontWeight: '700', fontSize: '14px' }}>{alloc.subjects?.name}</p>
+                          <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{alloc.subjects?.code} • {alloc.subjects?.credits} Credits</p>
+                          <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '10px', padding: '2px 6px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px' }}>{alloc.subjects?.type?.toUpperCase()}</span>
+                            <button onClick={() => handleDelete('section_subject_allocations', alloc.id)} style={{ color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={14} /></button>
+                          </div>
+                        </motion.div>
+                      ))}
+                      
+                      {curriculumState.sectionId && currentSubjects.length === 0 && (
+                        <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                           <BookOpen size={40} style={{ opacity: 0.2, marginBottom: '16px' }} />
+                           <p>No subjects allocated to this section yet.</p>
+                        </div>
+                      )}
+
+                      {!curriculumState.sectionId && (
+                        <div style={{ gridColumn: '1/-1', textAlign: 'center', padding: '40px', color: 'var(--text-muted)' }}>
+                           <Search size={40} style={{ opacity: 0.2, marginBottom: '16px' }} />
+                           <p>Select a Course, Semester, and Section to view curriculum.</p>
+                        </div>
+                      )}
+                   </div>
+                </div>
+              </div>
             </motion.div>
           )}
 
