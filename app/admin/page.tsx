@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Users, UserPlus, LogOut, LayoutDashboard, Settings, Shield, 
   BookOpen, CreditCard, Search, Trash2, Edit3, Filter, 
-  MoreVertical, Upload, FileText, Plus, X, Check, AlertTriangle, Book, Landmark, Bookmark, Bell, DollarSign, Megaphone, Loader2, TrendingUp, ArrowUpRight, Menu, Clock, Grid, List, ClipboardList, GraduationCap, Settings2, Laptop, Monitor, Layout, PlusSquare, UserCheck, UserX, CalendarDays, History
+  MoreVertical, Upload, FileText, Plus, X, Check, AlertTriangle, Book, Landmark, Bookmark, Bell, DollarSign, Megaphone, Loader2, TrendingUp, ArrowUpRight, Menu, Clock
 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -15,15 +15,17 @@ import ScreenLoader from '@/components/ScreenLoader'
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('overview')
   const [users, setUsers] = useState<any[]>([])
-  const [courses, setCourses] = useState<any[]>([])
   
-  // University Hierarchy States
+  // Advanced Academic State
   const [departments, setDepartments] = useState<any[]>([])
   const [programs, setPrograms] = useState<any[]>([])
   const [semesters, setSemesters] = useState<any[]>([])
   const [sections, setSections] = useState<any[]>([])
   const [subjects, setSubjects] = useState<any[]>([])
+  const [subjectAllocations, setSubjectAllocations] = useState<any[]>([])
   const [facultyAssignments, setFacultyAssignments] = useState<any[]>([])
+  const [courses, setCourses] = useState<any[]>([])
+  
 
   const [fees, setFees] = useState<any[]>([])
   const [books, setBooks] = useState<any[]>([])
@@ -35,28 +37,28 @@ const AdminDashboard = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   
   const [showImportModal, setShowImportModal] = useState(false)
+  const [showHierarchyModal, setShowHierarchyModal] = useState(false)
+  const [showSubjectModal, setShowSubjectModal] = useState(false)
+  const [showAssignModal, setShowAssignModal] = useState(false)
   const [showCourseModal, setShowCourseModal] = useState(false)
   const [showBookModal, setShowBookModal] = useState(false)
   const [showFeeModal, setShowFeeModal] = useState(false)
   const [showAnnounceModal, setShowAnnounceModal] = useState(false)
   const [showPayrollModal, setShowPayrollModal] = useState(false)
+  const [showPreview, setShowPreview] = useState(false)
+  const [previewData, setPreviewData] = useState<any[]>([])
 
-  const [importType, setImportType] = useState<'student' | 'teacher' | 'enrollment'>('student')
+  const [hierarchyForm, setHierarchyForm] = useState({ type: 'department', name: '', parent_id: '', code: '' })
+  const [subForm, setSubForm] = useState({ name: '', code: '', type: 'theory', credits: 3, semester_id: '', is_elective: false })
+  const [assignForm, setAssignForm] = useState({ teacher_id: '', subject_id: '', section_id: '' })
+  
+  const [importType, setImportType] = useState<'student' | 'teacher' | 'enrollment' | 'subject'>('student')
   const [csvData, setCsvData] = useState('')
-  const [courseForm, setCourseForm] = useState({ name: '', code: '', department: 'Computer Applications' })
-  const [subjectForm, setSubjectForm] = useState({ name: '', code: '', semester_id: '', type: 'core', credits: 1, is_practical: false, is_elective: false })
-  const [assignmentForm, setAssignmentForm] = useState({ teacher_id: '', subject_id: '', section_id: '', type: 'primary' })
-  const [enrollmentForm, setEnrollmentForm] = useState({ student_id: '', section_id: '', semester_id: '' })
+  const [courseForm, setCourseForm] = useState({ name: '', code: '', department: 'Computer Science' })
   const [bookForm, setBookForm] = useState({ title: '', author: '', isbn: '', category: 'CS', total_copies: 1 })
   const [feeForm, setFeeForm] = useState({ student_id: '', title: '', amount: '', due_date: '' })
   const [announceForm, setAnnounceForm] = useState({ title: '', message: '', type: 'general', target_role: 'all' })
   const [payrollForm, setPayrollForm] = useState({ teacher_id: '', month: 'May', year: 2026, base_salary: '', bonus: '0', deductions: '0' })
-
-  // Selection states for filtering hierarchy
-  const [selDept, setSelDept] = useState('')
-  const [selProg, setSelProg] = useState('')
-  const [selSem, setSelSem] = useState('')
-  const [selSec, setSelSec] = useState('')
 
   const router = useRouter()
   const supabase = createClient()
@@ -68,15 +70,15 @@ const AdminDashboard = () => {
     const { data: u } = await supabase.from('profiles').select('*').order('created_at', { ascending: false })
     const { data: c } = await supabase.from('courses').select('*')
     
-    // Fetch hierarchy tables (with error fallback in case migration not applied yet)
     try {
-      const [{data: d}, {data: p}, {data: s}, {data: sec}, {data: sub}, {data: fa}] = await Promise.all([
+      const [{data: d}, {data: p}, {data: s}, {data: sec}, {data: sub}, {data: fa}, {data: alloc}] = await Promise.all([
         supabase.from('departments').select('*'),
         supabase.from('programs').select('*'),
         supabase.from('semesters').select('*'),
         supabase.from('sections').select('*'),
-        supabase.from('subjects').select('*'),
-        supabase.from('faculty_assignments').select('*, profiles(name), subjects(name), sections(name)')
+        supabase.from('subjects').select('*').order('order_sequence', { ascending: true }),
+        supabase.from('faculty_assignments').select('*, profiles(name), subjects(name), sections(name)'),
+        supabase.from('section_subject_allocations').select('*, subjects(*), sections(*)')
       ])
       if(d) setDepartments(d)
       if(p) setPrograms(p)
@@ -84,7 +86,8 @@ const AdminDashboard = () => {
       if(sec) setSections(sec)
       if(sub) setSubjects(sub)
       if(fa) setFacultyAssignments(fa)
-    } catch(e) { console.log('Hierarchy tables not yet available') }
+      if(alloc) setSubjectAllocations(alloc)
+    } catch(e) { console.log('Hierarchy tables error:', e) }
 
     const { data: f } = await supabase.from('fees').select('*, profiles(name, roll_no)')
     const { data: b } = await supabase.from('books').select('*')
@@ -133,13 +136,62 @@ const AdminDashboard = () => {
         }, { onConflict: 'roll_no' })
       } else if (importType === 'enrollment') {
         const { data: student } = await supabase.from('profiles').select('id').eq('roll_no', data.roll_no).single()
-        const { data: course } = await supabase.from('courses').select('id').eq('code', data.course_code).single()
-        if (student && course) {
-          await supabase.from('enrollments').upsert({ student_id: student.id, course_id: course.id })
+        const { data: section } = await supabase.from('sections').select('id').eq('name', data.section_name).single()
+        if (student && section) {
+          await supabase.from('student_enrollments').upsert({ student_id: student.id, section_id: section.id })
         }
+      } else if (importType === 'subject') {
+        await supabase.from('subjects').upsert({
+          name: data.name,
+          code: data.code,
+          credits: parseInt(data.credits) || 3,
+          type: data.type || 'theory'
+        }, { onConflict: 'code' })
       }
     }
-    setProcessing(false); setShowImportModal(false); setCsvData(''); fetchData();
+    setProcessing(false); setShowImportModal(false); setShowPreview(false); setCsvData(''); fetchData();
+  }
+
+  const executePromotion = async (fromSem: string, toSem: string) => {
+    setProcessing(true)
+    // Fetch students in fromSem sections
+    const { data: enrollments } = await supabase.from('student_enrollments')
+      .select('*, sections!inner(semester_id)')
+      .eq('sections.semester_id', fromSem)
+    
+    if (enrollments && enrollments.length > 0) {
+      // Logic to find corresponding section in toSem (simplified)
+      // In a real app, you'd map "Section A" of Sem 1 to "Section A" of Sem 2
+      const { data: toSections } = await supabase.from('sections').select('*').eq('semester_id', toSem)
+      
+      for (const enr of enrollments) {
+        const currentSec = sections.find(s => s.id === enr.section_id)
+        const destinationSec = toSections?.find(s => s.name === currentSec?.name)
+        if (destinationSec) {
+          await supabase.from('student_enrollments').insert([{
+            student_id: enr.student_id,
+            section_id: destinationSec.id
+          }])
+        }
+      }
+      alert('Promotion executed successfully!')
+    }
+    setProcessing(false)
+  }
+
+  const handlePreviewCSV = () => {
+    const lines = csvData.trim().split('\n')
+    if (lines.length < 2) return
+    const headers = lines[0].split(',').map(h => h.trim())
+    const rows = lines.slice(1).slice(0, 10) // Only preview 10
+    const preview = rows.map(row => {
+      const values = row.split(',').map(v => v.trim())
+      const obj: any = {}
+      headers.forEach((h, i) => obj[h] = values[i])
+      return obj
+    })
+    setPreviewData(preview)
+    setShowPreview(true)
   }
 
   const handleAddCourse = async () => {
@@ -170,33 +222,54 @@ const AdminDashboard = () => {
     await fetchData();
     setProcessing(false)
   }
-  const handleAddSubject = async () => {
-    setProcessing(true)
-    await supabase.from('subjects').insert([subjectForm]);
-    setShowCourseModal(false); 
-    await fetchData();
-    setProcessing(false)
-  }
-  const handleAddAssignment = async () => {
-    setProcessing(true)
-    await supabase.from('faculty_assignments').insert([assignmentForm]);
-    setShowPayrollModal(false); 
-    await fetchData();
-    setProcessing(false)
-  }
-  const handleAddEnrollment = async () => {
-    setProcessing(true)
-    await supabase.from('student_enrollments').insert([enrollmentForm]);
-    setShowCourseModal(false); 
-    await fetchData();
-    setProcessing(false)
-  }
   const handleAddPayroll = async () => {
     setProcessing(true)
     const net = parseFloat(payrollForm.base_salary) + parseFloat(payrollForm.bonus) - parseFloat(payrollForm.deductions);
     await supabase.from('payroll').insert([{ ...payrollForm, net_salary: net, status: 'pending' }]);
     setShowPayrollModal(false); 
     await fetchData();
+    setProcessing(false)
+  }
+
+  const handleAddSubject = async () => {
+    setProcessing(true)
+    await supabase.from('subjects').insert([subForm])
+    setShowSubjectModal(false)
+    await fetchData()
+    setProcessing(false)
+  }
+
+  const handleAssignFaculty = async () => {
+    setProcessing(true)
+    // First, ensure subject-section allocation exists
+    let allocationId = ''
+    const { data: alloc } = await supabase.from('section_subject_allocations')
+      .select('id')
+      .eq('section_id', assignForm.section_id)
+      .eq('subject_id', assignForm.subject_id)
+      .single()
+    
+    if (alloc) {
+      allocationId = alloc.id
+    } else {
+      const { data: newAlloc } = await supabase.from('section_subject_allocations')
+        .insert([{ section_id: assignForm.section_id, subject_id: assignForm.subject_id }])
+        .select()
+        .single()
+      if (newAlloc) allocationId = newAlloc.id
+    }
+
+    if (allocationId) {
+      await supabase.from('faculty_assignments').insert([{
+        teacher_id: assignForm.teacher_id,
+        subject_id: assignForm.subject_id,
+        section_id: assignForm.section_id,
+        allocation_id: allocationId
+      }])
+    }
+    
+    setShowAssignModal(false)
+    await fetchData()
     setProcessing(false)
   }
 
@@ -241,17 +314,13 @@ const AdminDashboard = () => {
         </div>
         <nav style={{ flex: 1, overflowY: 'auto' }}>
           <SidebarItem icon={<LayoutDashboard size={18} />} label="Overview" active={activeTab === 'overview'} onClick={() => { setActiveTab('overview'); setIsSidebarOpen(false); }} />
-          <SidebarItem icon={<Users size={18} />} label="User Manager" active={activeTab === 'users'} onClick={() => { setActiveTab('users'); setIsSidebarOpen(false); }} />
-          <SidebarItem icon={<Grid size={18} />} label="Academic Structure" active={activeTab === 'hierarchy'} onClick={() => { setActiveTab('hierarchy'); setIsSidebarOpen(false); }} />
-          <SidebarItem icon={<List size={18} />} label="Subject Manager" active={activeTab === 'subjects'} onClick={() => { setActiveTab('subjects'); setIsSidebarOpen(false); }} />
-          <SidebarItem icon={<ClipboardList size={18} />} label="Faculty Assignment" active={activeTab === 'assignments'} onClick={() => { setActiveTab('assignments'); setIsSidebarOpen(false); }} />
-          <SidebarItem icon={<GraduationCap size={18} />} label="Student Enrollment" active={activeTab === 'enrollment'} onClick={() => { setActiveTab('enrollment'); setIsSidebarOpen(false); }} />
+          <SidebarItem icon={<Users size={18} />} label="User Management" active={activeTab === 'users'} onClick={() => { setActiveTab('users'); setIsSidebarOpen(false); }} />
+          <SidebarItem icon={<BookOpen size={18} />} label="Academic Structure" active={activeTab === 'hierarchy'} onClick={() => { setActiveTab('hierarchy'); setIsSidebarOpen(false); }} />
+          <SidebarItem icon={<Edit3 size={18} />} label="Subject Manager" active={activeTab === 'subjects'} onClick={() => { setActiveTab('subjects'); setIsSidebarOpen(false); }} />
+          <SidebarItem icon={<Shield size={18} />} label="Faculty Assignment" active={activeTab === 'faculty'} onClick={() => { setActiveTab('faculty'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<ArrowUpRight size={18} />} label="Promotion Wizard" active={activeTab === 'promotion'} onClick={() => { setActiveTab('promotion'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<Landmark size={18} />} label="Finance" active={activeTab === 'finance'} onClick={() => { setActiveTab('finance'); setIsSidebarOpen(false); }} />
-          <SidebarItem icon={<DollarSign size={18} />} label="Payroll" active={activeTab === 'payroll'} onClick={() => { setActiveTab('payroll'); setIsSidebarOpen(false); }} />
-          <SidebarItem icon={<Bookmark size={18} />} label="Library" active={activeTab === 'library'} onClick={() => { setActiveTab('library'); setIsSidebarOpen(false); }} />
-          <SidebarItem icon={<Megaphone size={18} />} label="Announce" active={activeTab === 'announce'} onClick={() => { setActiveTab('announce'); setIsSidebarOpen(false); }} />
-          <SidebarItem icon={<Upload size={18} />} label="Import Center" active={activeTab === 'import'} onClick={() => { setActiveTab('import'); setIsSidebarOpen(false); }} />
+          <SidebarItem icon={<Upload size={18} />} label="Bulk Import Center" active={activeTab === 'import'} onClick={() => { setActiveTab('import'); setIsSidebarOpen(false); }} />
         </nav>
         <button onClick={handleLogout} className="btn-secondary" style={{ width: '100%', marginTop: '20px' }}><LogOut size={18} /> Logout</button>
       </aside>
@@ -333,201 +402,102 @@ const AdminDashboard = () => {
             </motion.div>
           )}
 
-          {activeTab === 'hierarchy' && (
-            <motion.div key="hierarchy" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                 <div>
-                    <h2 style={{ fontSize: '24px', fontWeight: '800' }}>Academic Structure Builder</h2>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Define your university's core hierarchy from Departments to Sections.</p>
-                 </div>
-                 <div style={{ display: 'flex', gap: '12px' }}>
-                    <button className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => alert('New Department')}><Plus size={18} /> New Dept</button>
-                    <button className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => alert('New Program')}><Plus size={18} /> New Program</button>
-                 </div>
-              </div>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: '300px 1fr', gap: '24px' }} className="responsive-grid">
-                 <div className="glass-card" style={{ padding: '24px' }}>
-                    <h3 style={{ fontSize: '16px', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}><Landmark size={18} color="var(--accent-cyan)" /> Departments</h3>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                       {departments.map(d => (
-                          <div key={d.id} 
-                               onClick={() => setSelDept(d.id)}
-                               style={{ padding: '12px 16px', borderRadius: '12px', background: selDept === d.id ? 'rgba(255,255,255,0.08)' : 'rgba(255,255,255,0.02)', cursor: 'pointer', border: '1px solid', borderColor: selDept === d.id ? 'var(--accent-cyan)' : 'transparent', transition: '0.2s' }}>
-                             {d.name}
-                          </div>
-                       ))}
-                    </div>
-                 </div>
-                 
-                 <div className="glass-card" style={{ padding: '24px' }}>
-                    {!selDept ? (
-                       <div style={{ height: '300px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}>Select a department to view programs</div>
-                    ) : (
-                       <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
-                             <h3 style={{ fontSize: '18px' }}>Programs in {departments.find(d => d.id === selDept)?.name}</h3>
-                          </div>
-                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
-                             {programs.filter(p => p.department_id === selDept).map(p => (
-                                <div key={p.id} className="glass-card" style={{ padding: '20px', background: 'rgba(255,255,255,0.03)', position: 'relative' }}>
-                                   <div style={{ position: 'absolute', top: '12px', right: '12px' }}><ArrowUpRight size={14} color="var(--text-muted)" /></div>
-                                   <h4 style={{ fontWeight: '700', marginBottom: '4px' }}>{p.name}</h4>
-                                   <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>{p.duration_years} Years Duration</p>
-                                   <div style={{ marginTop: '16px', display: 'flex', gap: '8px' }}>
-                                      <button style={{ fontSize: '10px', padding: '4px 8px', borderRadius: '4px', border: '1px solid var(--glass-border)', background: 'transparent', color: 'white' }}>View Semesters</button>
-                                   </div>
-                                </div>
-                             ))}
-                          </div>
-                       </div>
-                    )}
-                 </div>
-              </div>
-            </motion.div>
-          )}
-
           {activeTab === 'subjects' && (
             <motion.div key="subjects" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                 <div>
-                    <h2 style={{ fontSize: '24px', fontWeight: '800' }}>Subject Management Panel</h2>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Configure curriculum subjects, credits, and evaluation types.</p>
-                 </div>
-                 <button className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => setShowCourseModal(true)}><Plus size={18} /> New Subject</button>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+                <h2>Subject Management System</h2>
+                <button onClick={() => { setSubForm({ name: '', code: '', type: 'theory', credits: 3, semester_id: '', is_elective: false }); setShowSubjectModal(true); }} className="btn-primary"><Plus size={18} /> New Subject</button>
               </div>
-              
               <div className="glass-card" style={{ padding: '0', overflow: 'hidden' }}>
-                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead style={{ background: 'rgba(255,255,255,0.02)' }}>
-                       <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--glass-border)' }}>
-                          <th style={{ padding: '16px 24px', fontSize: '12px', color: 'var(--text-muted)' }}>SUBJECT NAME</th>
-                          <th style={{ padding: '16px 24px', fontSize: '12px', color: 'var(--text-muted)' }}>CODE</th>
-                          <th style={{ padding: '16px 24px', fontSize: '12px', color: 'var(--text-muted)' }}>TYPE</th>
-                          <th style={{ padding: '16px 24px', fontSize: '12px', color: 'var(--text-muted)' }}>CREDITS</th>
-                          <th style={{ padding: '16px 24px', fontSize: '12px', color: 'var(--text-muted)' }}>SEMESTER</th>
-                          <th style={{ padding: '16px 24px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'right' }}>ACTIONS</th>
-                       </tr>
-                    </thead>
-                    <tbody>
-                       {subjects.map(s => (
-                          <tr key={s.id} style={{ borderBottom: '1px solid var(--glass-border)' }} className="hover-row">
-                             <td style={{ padding: '16px 24px' }}>
-                                <div style={{ fontWeight: '600' }}>{s.name}</div>
-                                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Sequence: {s.sequence_order || 0}</div>
-                             </td>
-                             <td style={{ padding: '16px 24px' }}><code style={{ color: 'var(--accent-cyan)' }}>{s.code}</code></td>
-                             <td style={{ padding: '16px 24px' }}>
-                                <span style={{ padding: '4px 8px', borderRadius: '100px', fontSize: '10px', background: s.type === 'lab' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)', color: s.type === 'lab' ? 'var(--error)' : 'var(--success)', textTransform: 'uppercase', fontWeight: '700' }}>{s.type}</span>
-                             </td>
-                             <td style={{ padding: '16px 24px', fontWeight: '700' }}>{s.credits || 1.0}</td>
-                             <td style={{ padding: '16px 24px', fontSize: '13px' }}>Sem {semesters.find(sem => sem.id === s.semester_id)?.term_number || 'N/A'}</td>
-                             <td style={{ padding: '16px 24px', textAlign: 'right' }}>
-                                <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-                                   <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><Edit3 size={16} /></button>
-                                   <button style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer' }} onClick={() => handleDelete('subjects', s.id)}><Trash2 size={16} /></button>
-                                </div>
-                             </td>
-                          </tr>
-                       ))}
-                    </tbody>
-                 </table>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--glass-border)', background: 'rgba(255,255,255,0.02)' }}>
+                      <th style={{ padding: '16px 24px' }}>Code</th>
+                      <th style={{ padding: '16px 24px' }}>Name</th>
+                      <th style={{ padding: '16px 24px' }}>Type</th>
+                      <th style={{ padding: '16px 24px' }}>Credits</th>
+                      <th style={{ padding: '16px 24px' }}>Status</th>
+                      <th style={{ padding: '16px 24px' }}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {subjects.map(s => (
+                      <tr key={s.id} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                        <td style={{ padding: '16px 24px', fontWeight: 'bold', color: 'var(--accent-cyan)' }}>{s.code}</td>
+                        <td style={{ padding: '16px 24px' }}>{s.name}</td>
+                        <td style={{ padding: '16px 24px' }}><span style={{ padding: '4px 8px', borderRadius: '4px', fontSize: '10px', background: s.type === 'lab' ? 'rgba(217, 70, 239, 0.1)' : 'rgba(6, 182, 212, 0.1)', color: s.type === 'lab' ? 'var(--accent-magenta)' : 'var(--accent-cyan)', border: '1px solid currentColor' }}>{s.type.toUpperCase()}</span></td>
+                        <td style={{ padding: '16px 24px' }}>{s.credits}</td>
+                        <td style={{ padding: '16px 24px' }}><span style={{ color: 'var(--success)' }}>Active</span></td>
+                        <td style={{ padding: '16px 24px' }}><button onClick={() => handleDelete('subjects', s.id)} style={{ color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={16} /></button></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </motion.div>
           )}
 
-          {activeTab === 'assignments' && (
-            <motion.div key="assignments" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                 <div>
-                    <h2 style={{ fontSize: '24px', fontWeight: '800' }}>Faculty Assignment Dashboard</h2>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Map teachers to subjects and specific class sections.</p>
-                 </div>
-                 <button className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => setShowPayrollModal(true)}><Plus size={18} /> New Assignment</button>
+          {activeTab === 'faculty' && (
+            <motion.div key="faculty" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+                <h2>Faculty Assignment Dashboard</h2>
+                <button onClick={() => setShowAssignModal(true)} className="btn-primary"><Plus size={18} /> Assign Faculty</button>
               </div>
-              
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
-                 {facultyAssignments.map(a => (
-                    <div key={a.id} className="glass-card" style={{ padding: '24px', position: 'relative', overflow: 'hidden' }}>
-                       <div style={{ position: 'absolute', top: 0, right: 0, padding: '8px 12px', background: 'rgba(255,255,255,0.05)', fontSize: '10px', fontWeight: '700', borderRadius: '0 0 0 12px', color: 'var(--accent-purple)' }}>{a.assignment_type?.toUpperCase() || 'PRIMARY'}</div>
-                       <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
-                          <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-cyan))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: '800', fontSize: '18px' }}>
-                             {a.profiles?.name?.[0]}
-                          </div>
-                          <div>
-                             <h4 style={{ fontWeight: '700' }}>{a.profiles?.name}</h4>
-                             <p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Faculty Member</p>
-                          </div>
-                       </div>
-                       
-                       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                             <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Subject</span>
-                             <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--accent-cyan)' }}>{a.subjects?.name}</span>
-                          </div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                             <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Section</span>
-                             <span style={{ fontSize: '12px', fontWeight: '700' }}>Sec {a.sections?.name}</span>
-                          </div>
-                       </div>
-                       
-                       <div style={{ marginTop: '20px', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                          <button style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }} onClick={() => handleDelete('faculty_assignments', a.id)}><Trash2 size={14} /> Remove</button>
-                       </div>
+              <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
+                {facultyAssignments.map(fa => (
+                  <div key={fa.id} className="glass-card" style={{ padding: '24px', borderLeft: '4px solid var(--accent-purple)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                      <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                        <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Shield size={20} color="var(--accent-purple)" /></div>
+                        <div><h3 style={{ fontSize: '16px' }}>{fa.profiles?.name}</h3><p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Faculty Member</p></div>
+                      </div>
+                      <button onClick={() => handleDelete('faculty_assignments', fa.id)} style={{ color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer' }}><X size={16} /></button>
                     </div>
-                 ))}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}><span style={{ color: 'var(--text-muted)' }}>Subject:</span><span>{fa.subjects?.name}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}><span style={{ color: 'var(--text-muted)' }}>Section:</span><span>{fa.sections?.name}</span></div>
+                    </div>
+                  </div>
+                ))}
               </div>
             </motion.div>
           )}
 
-          {activeTab === 'enrollment' && (
-            <motion.div key="enrollment" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+          {activeTab === 'hierarchy' && (
+            <motion.div key="hierarchy" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
                  <div>
-                    <h2 style={{ fontSize: '24px', fontWeight: '800' }}>Student Enrollment Manager</h2>
-                    <p style={{ color: 'var(--text-muted)', fontSize: '13px' }}>Handle student registrations and section allocations.</p>
+                   <h2>Academic Structure Builder</h2>
+                   <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Manage the university organizational hierarchy.</p>
                  </div>
                  <div style={{ display: 'flex', gap: '12px' }}>
-                    <button className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => { setImportType('enrollment'); setShowImportModal(true); }}><Upload size={18} /> Bulk Enrollment</button>
-                    <button className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }} onClick={() => setShowCourseModal(true)}><Plus size={18} /> Enroll Student</button>
+                   <button className="btn-secondary" onClick={() => setShowHierarchyModal(true)}><Plus size={16} /> Add Dept/Program</button>
+                   <button className="btn-primary" onClick={() => setShowHierarchyModal(true)}><Plus size={16} /> Build Structure</button>
                  </div>
               </div>
               
-              <div className="glass-card" style={{ padding: '0', overflow: 'hidden' }}>
-                 <div style={{ padding: '20px', borderBottom: '1px solid var(--glass-border)', display: 'flex', gap: '16px' }}>
-                    <div style={{ position: 'relative', flex: 1 }}><Search size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} /><input className="input-field" placeholder="Filter by name or roll number..." style={{ paddingLeft: '40px', height: '40px' }} /></div>
-                    <select className="input-field" style={{ width: '200px', height: '40px' }}><option>All Sections</option></select>
-                 </div>
-                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                    <thead style={{ background: 'rgba(255,255,255,0.02)' }}>
-                       <tr style={{ textAlign: 'left', borderBottom: '1px solid var(--glass-border)' }}>
-                          <th style={{ padding: '16px 24px', fontSize: '12px', color: 'var(--text-muted)' }}>STUDENT</th>
-                          <th style={{ padding: '16px 24px', fontSize: '12px', color: 'var(--text-muted)' }}>ROLL NO</th>
-                          <th style={{ padding: '16px 24px', fontSize: '12px', color: 'var(--text-muted)' }}>SECTION</th>
-                          <th style={{ padding: '16px 24px', fontSize: '12px', color: 'var(--text-muted)' }}>SEMESTER</th>
-                          <th style={{ padding: '16px 24px', fontSize: '12px', color: 'var(--text-muted)', textAlign: 'right' }}>STATUS</th>
-                       </tr>
-                    </thead>
-                    <tbody>
-                       {/* This would be a joined list of student_enrollments */}
-                       {users.filter(u => u.role === 'student').map(s => (
-                          <tr key={s.id} style={{ borderBottom: '1px solid var(--glass-border)' }} className="hover-row">
-                             <td style={{ padding: '16px 24px' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                   <div style={{ width: '32px', height: '32px', borderRadius: '8px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: '700' }}>{s.name[0]}</div>
-                                   <div style={{ fontWeight: '600' }}>{s.name}</div>
-                                </div>
-                             </td>
-                             <td style={{ padding: '16px 24px' }}><code style={{ color: 'var(--text-muted)' }}>{s.roll_no}</code></td>
-                             <td style={{ padding: '16px 24px' }}>Section A</td>
-                             <td style={{ padding: '16px 24px' }}>Sem 1</td>
-                             <td style={{ padding: '16px 24px', textAlign: 'right' }}>
-                                <span style={{ padding: '4px 8px', borderRadius: '100px', fontSize: '10px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', fontWeight: '700' }}>ACTIVE</span>
-                             </td>
-                          </tr>
-                       ))}
-                    </tbody>
-                 </table>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+                 {departments.map(dept => (
+                   <div key={dept.id} className="glass-card" style={{ padding: '24px', borderTop: '4px solid var(--accent-cyan)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                        <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Landmark size={20} color="var(--accent-cyan)" /> {dept.name}</h3>
+                        <span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: '4px' }}>{dept.code || 'DEPT'}</span>
+                      </div>
+                      
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        {programs.filter(p => p.department_id === dept.id).map(prog => (
+                          <div key={prog.id} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                            <p style={{ fontWeight: '600', fontSize: '14px', color: 'var(--accent-purple)', marginBottom: '4px' }}>{prog.name}</p>
+                            <div style={{ display: 'flex', gap: '16px' }}>
+                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{semesters.filter(s => s.program_id === prog.id).length} Semesters</span>
+                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{sections.filter(sec => semesters.filter(s => s.program_id === prog.id).map(s => s.id).includes(sec.semester_id)).length} Sections</span>
+                            </div>
+                          </div>
+                        ))}
+                        {programs.filter(p => p.department_id === dept.id).length === 0 && <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>No programs assigned</p>}
+                      </div>
+                   </div>
+                 ))}
               </div>
             </motion.div>
           )}
@@ -545,21 +515,21 @@ const AdminDashboard = () => {
                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', textAlign: 'left', marginBottom: '32px' }}>
                     <div>
                        <label style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>From Semester</label>
-                       <select className="input-field" style={{ width: '100%', background: 'rgba(255,255,255,0.05)' }}>
+                       <select id="fromSem" className="input-field" style={{ width: '100%', background: 'rgba(255,255,255,0.05)' }}>
                           <option value="">Select current semester...</option>
                           {semesters.map(s => <option key={s.id} value={s.id} style={{ background: '#1a1a1a' }}>Semester {s.term_number} ({s.academic_year})</option>)}
                        </select>
                     </div>
                     <div>
                        <label style={{ fontSize: '13px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>To Semester (Destination)</label>
-                       <select className="input-field" style={{ width: '100%', background: 'rgba(255,255,255,0.05)' }}>
+                       <select id="toSem" className="input-field" style={{ width: '100%', background: 'rgba(255,255,255,0.05)' }}>
                           <option value="">Select next semester...</option>
                           {semesters.map(s => <option key={s.id} value={s.id} style={{ background: '#1a1a1a' }}>Semester {s.term_number} ({s.academic_year})</option>)}
                        </select>
                     </div>
                  </div>
                  
-                 <button className="btn-primary" style={{ width: '100%', background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-cyan))' }} onClick={() => alert('Promotion logic requires backend trigger. This UI is ready!')}>
+                 <button className="btn-primary" style={{ width: '100%', background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-cyan))' }} onClick={() => executePromotion((document.getElementById('fromSem') as HTMLSelectElement).value, (document.getElementById('toSem') as HTMLSelectElement).value)}>
                     <ArrowUpRight size={18} style={{ marginRight: '8px' }} /> Execute Promotion
                  </button>
                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '16px' }}><AlertTriangle size={12} color="var(--error)" style={{ display: 'inline', marginRight: '4px' }} /> Warning: This will finalize current semester grades and attendance.</p>
@@ -617,14 +587,28 @@ const AdminDashboard = () => {
 
           {activeTab === 'import' && (
             <motion.div key="import" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <div className="glass-card" style={{ padding: '40px', textAlign: 'center' }}>
-                <FileText size={48} color="var(--accent-purple)" style={{ marginBottom: '24px' }} />
-                <h2>Bulk Operations</h2>
-                <p style={{ marginBottom: '32px', color: 'var(--text-muted)' }}>Paste your CSV data below to perform bulk actions.</p>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px' }}>
-                  <ImportCard label="Import Students" onClick={() => { setImportType('student'); setShowImportModal(true); }} />
-                  <ImportCard label="Import Teachers" onClick={() => { setImportType('teacher'); setShowImportModal(true); }} />
-                  <ImportCard label="Enroll in Courses" onClick={() => { setImportType('enrollment'); setShowImportModal(true); }} />
+              <div className="glass-card" style={{ padding: '40px', textAlign: 'center', border: '2px dashed var(--glass-border)', background: 'rgba(255,255,255,0.01)' }}>
+                <div style={{ padding: '40px' }}>
+                  <Upload size={48} className="neon-glow-cyan" style={{ marginBottom: '24px', animation: 'pulse 2s infinite' }} />
+                  <h2>Bulk Import Center</h2>
+                  <p style={{ marginBottom: '32px', color: 'var(--text-muted)' }}>Upload CSV/Excel or paste data to perform mass updates.</p>
+                  
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '40px' }}>
+                    <ImportCard label="Import Students" icon={<Users size={20} />} onClick={() => { setImportType('student'); setShowImportModal(true); }} />
+                    <ImportCard label="Import Teachers" icon={<Shield size={20} />} onClick={() => { setImportType('teacher'); setShowImportModal(true); }} />
+                    <ImportCard label="Import Subjects" icon={<Book size={20} />} onClick={() => { setImportType('subject'); setShowImportModal(true); }} />
+                    <ImportCard label="Enrollment Map" icon={<LinkIcon size={20} />} onClick={() => { setImportType('enrollment'); setShowImportModal(true); }} />
+                  </div>
+
+                  <div className="glass-card" style={{ padding: '24px', background: 'rgba(0,0,0,0.2)', textAlign: 'left' }}>
+                    <h4 style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}><AlertCircle size={16} color="var(--accent-cyan)" /> Import Instructions</h4>
+                    <ul style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      <li>• CSV header must match the field names (e.g., name, roll_no, email)</li>
+                      <li>• Enrollment map requires student_roll and section_name</li>
+                      <li>• Subject import requires name, code, credits, type</li>
+                      <li>• Duplicate records will be updated automatically (Upsert)</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -686,102 +670,61 @@ const AdminDashboard = () => {
         </AnimatePresence>
       </main>
 
-      {showCourseModal && (
+      {/* Modals */}
+      {showSubjectModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '450px', padding: '32px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '700' }}>{activeTab === 'subjects' ? 'Configure Subject' : activeTab === 'enrollment' ? 'Register Student' : 'Add Course'}</h3>
-              <button onClick={() => setShowCourseModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}><h3>New Subject</h3><button onClick={() => setShowSubjectModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button></div>
+            <input className="input-field" placeholder="Subject Name" value={subForm.name} onChange={e => setSubForm({...subForm, name: e.target.value})} style={{ marginBottom: '16px' }} />
+            <input className="input-field" placeholder="Subject Code" value={subForm.code} onChange={e => setSubForm({...subForm, code: e.target.value})} style={{ marginBottom: '16px' }} />
+            <div style={{ display: 'flex', gap: '12px', marginBottom: '16px' }}>
+              <select className="input-field" style={{ flex: 1, background: 'rgba(255,255,255,0.05)' }} value={subForm.type} onChange={e => setSubForm({...subForm, type: e.target.value})}>
+                <option value="theory" style={{background: '#1a1a1a'}}>Theory</option>
+                <option value="lab" style={{background: '#1a1a1a'}}>Lab/Practical</option>
+              </select>
+              <input type="number" className="input-field" style={{ width: '80px' }} placeholder="Credits" value={subForm.credits} onChange={e => setSubForm({...subForm, credits: parseInt(e.target.value)})} />
             </div>
-            
-            {activeTab === 'subjects' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                 <div><label style={{fontSize:'12px', color:'var(--text-muted)'}}>Name</label><input className="input-field" placeholder="e.g. Artificial Intelligence" value={subjectForm.name} onChange={e => setSubjectForm({...subjectForm, name: e.target.value})} /></div>
-                 <div><label style={{fontSize:'12px', color:'var(--text-muted)'}}>Code</label><input className="input-field" placeholder="e.g. AI-201" value={subjectForm.code} onChange={e => setSubjectForm({...subjectForm, code: e.target.value})} /></div>
-                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                    <div>
-                       <label style={{fontSize:'12px', color:'var(--text-muted)'}}>Type</label>
-                       <select className="input-field" value={subjectForm.type} onChange={e => setSubjectForm({...subjectForm, type: e.target.value})} style={{background:'rgba(255,255,255,0.05)'}}>
-                          <option value="core" style={{background:'#1a1a1a'}}>Core Theory</option>
-                          <option value="lab" style={{background:'#1a1a1a'}}>Practical/Lab</option>
-                          <option value="elective" style={{background:'#1a1a1a'}}>Elective</option>
-                       </select>
-                    </div>
-                    <div>
-                       <label style={{fontSize:'12px', color:'var(--text-muted)'}}>Credits</label>
-                       <input type="number" className="input-field" value={subjectForm.credits} onChange={e => setSubjectForm({...subjectForm, credits: parseFloat(e.target.value)})} />
-                    </div>
-                 </div>
-                 <select className="input-field" value={subjectForm.semester_id} onChange={e => setSubjectForm({...subjectForm, semester_id: e.target.value})} style={{background:'rgba(255,255,255,0.05)'}}>
-                    <option value="">Select Target Semester</option>
-                    {semesters.map(s => <option key={s.id} value={s.id} style={{background:'#1a1a1a'}}>Sem {s.term_number} ({s.academic_year})</option>)}
-                 </select>
-                 <LoadingButton onClick={handleAddSubject} loading={processing} style={{ width: '100%', marginTop: '8px' }}>Save Subject</LoadingButton>
-              </div>
-            ) : activeTab === 'enrollment' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                 <select className="input-field" value={enrollmentForm.student_id} onChange={e => setEnrollmentForm({...enrollmentForm, student_id: e.target.value})} style={{background:'rgba(255,255,255,0.05)'}}>
-                    <option value="">Select Student</option>
-                    {users.filter(u => u.role === 'student').map(s => <option key={s.id} value={s.id} style={{background:'#1a1a1a'}}>{s.name} ({s.roll_no})</option>)}
-                 </select>
-                 <select className="input-field" value={enrollmentForm.section_id} onChange={e => setEnrollmentForm({...enrollmentForm, section_id: e.target.value})} style={{background:'rgba(255,255,255,0.05)'}}>
-                    <option value="">Select Section</option>
-                    {sections.map(sec => <option key={sec.id} value={sec.id} style={{background:'#1a1a1a'}}>{sec.name} (Sem {semesters.find(s => s.id === sec.semester_id)?.term_number})</option>)}
-                 </select>
-                 <LoadingButton onClick={handleAddEnrollment} loading={processing} style={{ width: '100%', marginTop: '8px' }}>Enroll Student</LoadingButton>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                 <input className="input-field" placeholder="Course Name" value={courseForm.name} onChange={e => setCourseForm({...courseForm, name: e.target.value})} />
-                 <input className="input-field" placeholder="Course Code" value={courseForm.code} onChange={e => setCourseForm({...courseForm, code: e.target.value})} />
-                 <LoadingButton onClick={handleAddCourse} loading={processing} style={{ width: '100%', marginTop: '8px' }}>Add Course</LoadingButton>
-              </div>
-            )}
+            <select className="input-field" style={{ width: '100%', marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }} value={subForm.semester_id} onChange={e => setSubForm({...subForm, semester_id: e.target.value})}>
+              <option value="" style={{background: '#1a1a1a'}}>Select Default Semester</option>
+              {semesters.map(s => <option key={s.id} value={s.id} style={{background: '#1a1a1a'}}>Sem {s.term_number} ({s.academic_year})</option>)}
+            </select>
+            <LoadingButton onClick={handleAddSubject} loading={processing} style={{ width: '100%' }}>Create Subject</LoadingButton>
           </motion.div>
         </div>
       )}
 
-      {showPayrollModal && (
+      {showAssignModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
-          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '450px', padding: '32px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
-              <h3 style={{ fontSize: '18px', fontWeight: '700' }}>{activeTab === 'assignments' ? 'Assign Faculty' : 'New Payroll Record'}</h3>
-              <button onClick={() => setShowPayrollModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button>
-            </div>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}><h3>Faculty Assignment</h3><button onClick={() => setShowAssignModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button></div>
             
-            {activeTab === 'assignments' ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                 <select className="input-field" value={assignmentForm.teacher_id} onChange={e => setAssignmentForm({...assignmentForm, teacher_id: e.target.value})} style={{background:'rgba(255,255,255,0.05)'}}>
-                    <option value="">Select Teacher</option>
-                    {users.filter(u => u.role === 'teacher').map(t => <option key={t.id} value={t.id} style={{background:'#1a1a1a'}}>{t.name}</option>)}
-                 </select>
-                 <select className="input-field" value={assignmentForm.subject_id} onChange={e => setAssignmentForm({...assignmentForm, subject_id: e.target.value})} style={{background:'rgba(255,255,255,0.05)'}}>
-                    <option value="">Select Subject</option>
-                    {subjects.map(s => <option key={s.id} value={s.id} style={{background:'#1a1a1a'}}>{s.name} ({s.code})</option>)}
-                 </select>
-                 <select className="input-field" value={assignmentForm.section_id} onChange={e => setAssignmentForm({...assignmentForm, section_id: e.target.value})} style={{background:'rgba(255,255,255,0.05)'}}>
-                    <option value="">Select Section</option>
-                    {sections.map(sec => <option key={sec.id} value={sec.id} style={{background:'#1a1a1a'}}>Sec {sec.name}</option>)}
-                 </select>
-                 <select className="input-field" value={assignmentForm.type} onChange={e => setAssignmentForm({...assignmentForm, type: e.target.value})} style={{background:'rgba(255,255,255,0.05)'}}>
-                    <option value="primary">Primary Teacher</option>
-                    <option value="co-faculty">Co-Faculty</option>
-                    <option value="substitute">Substitute</option>
-                    <option value="lab">Lab Faculty</option>
-                 </select>
-                 <LoadingButton onClick={handleAddAssignment} loading={processing} style={{ width: '100%', marginTop: '8px' }}>Assign Faculty</LoadingButton>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                 <select className="input-field" value={payrollForm.teacher_id} onChange={e => setPayrollForm({...payrollForm, teacher_id: e.target.value})} style={{background:'rgba(255,255,255,0.05)'}}>
-                    <option value="">Select Teacher</option>
-                    {users.filter(u => u.role === 'teacher').map(t => <option key={t.id} value={t.id} style={{background:'#1a1a1a'}}>{t.name}</option>)}
-                 </select>
-                 <input type="number" className="input-field" placeholder="Base Salary" value={payrollForm.base_salary} onChange={e => setPayrollForm({...payrollForm, base_salary: e.target.value})} />
-                 <input type="number" className="input-field" placeholder="Bonus" value={payrollForm.bonus} onChange={e => setPayrollForm({...payrollForm, bonus: e.target.value})} />
-                 <LoadingButton onClick={handleAddPayroll} loading={processing} style={{ width: '100%', marginTop: '8px' }}>Save Record</LoadingButton>
-              </div>
-            )}
+            <select className="input-field" style={{ width: '100%', marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }} value={assignForm.teacher_id} onChange={e => setAssignForm({...assignForm, teacher_id: e.target.value})}>
+              <option value="" style={{background: '#1a1a1a'}}>Select Faculty</option>
+              {users.filter(u => u.role === 'teacher').map(u => <option key={u.id} value={u.id} style={{background: '#1a1a1a'}}>{u.name}</option>)}
+            </select>
+
+            <select className="input-field" style={{ width: '100%', marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }} value={assignForm.subject_id} onChange={e => setAssignForm({...assignForm, subject_id: e.target.value})}>
+              <option value="" style={{background: '#1a1a1a'}}>Select Subject</option>
+              {subjects.map(s => <option key={s.id} value={s.id} style={{background: '#1a1a1a'}}>{s.name} ({s.code})</option>)}
+            </select>
+
+            <select className="input-field" style={{ width: '100%', marginBottom: '24px', background: 'rgba(255,255,255,0.05)' }} value={assignForm.section_id} onChange={e => setAssignForm({...assignForm, section_id: e.target.value})}>
+              <option value="" style={{background: '#1a1a1a'}}>Select Section</option>
+              {sections.map(s => <option key={s.id} value={s.id} style={{background: '#1a1a1a'}}>{s.name} (Sem {semesters.find(sem => sem.id === s.semester_id)?.term_number})</option>)}
+            </select>
+
+            <LoadingButton onClick={handleAssignFaculty} loading={processing} style={{ width: '100%' }}>Finalize Assignment</LoadingButton>
+          </motion.div>
+        </div>
+      )}
+
+      {showCourseModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}><h3>Add Course</h3><button onClick={() => setShowCourseModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button></div>
+            <input className="input-field" placeholder="Course Name" value={courseForm.name} onChange={e => setCourseForm({...courseForm, name: e.target.value})} style={{ marginBottom: '16px' }} />
+            <input className="input-field" placeholder="Course Code" value={courseForm.code} onChange={e => setCourseForm({...courseForm, code: e.target.value})} style={{ marginBottom: '16px' }} />
+            <LoadingButton onClick={handleAddCourse} loading={processing} style={{ width: '100%' }}>Save Course</LoadingButton>
           </motion.div>
         </div>
       )}
@@ -794,7 +737,7 @@ const AdminDashboard = () => {
               <option value="" disabled style={{background: '#1a1a1a'}}>Select Student</option>
               {users.filter(u => u.role === 'student').map(u => <option key={u.id} value={u.id} style={{background: '#1a1a1a'}}>{u.name}</option>)}
             </select>
-            <input className="input-field" placeholder="Fee Title" value={feeForm.title} onChange={e => setFeeForm({...feeForm, title: e.target.value})} style={{ marginBottom: '16px' }} />
+            <input className="input-field" placeholder="Fee Title (e.g. Tuition)" value={feeForm.title} onChange={e => setFeeForm({...feeForm, title: e.target.value})} style={{ marginBottom: '16px' }} />
             <input type="number" className="input-field" placeholder="Amount" value={feeForm.amount} onChange={e => setFeeForm({...feeForm, amount: e.target.value})} style={{ marginBottom: '16px' }} />
             <input type="date" className="input-field" value={feeForm.due_date} onChange={e => setFeeForm({...feeForm, due_date: e.target.value})} style={{ marginBottom: '16px' }} />
             <LoadingButton onClick={handleAddFee} loading={processing} style={{ width: '100%' }}>Assign Fee</LoadingButton>
@@ -835,6 +778,20 @@ const AdminDashboard = () => {
         </div>
       )}
 
+      {showPayrollModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}><h3>Add Payroll</h3><button onClick={() => setShowPayrollModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button></div>
+            <select className="input-field" value={payrollForm.teacher_id} onChange={e => setPayrollForm({...payrollForm, teacher_id: e.target.value})} style={{ marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }}>
+              <option value="" disabled style={{background: '#1a1a1a'}}>Select Teacher</option>
+              {users.filter(u => u.role === 'teacher').map(u => <option key={u.id} value={u.id} style={{background: '#1a1a1a'}}>{u.name}</option>)}
+            </select>
+            <input type="number" className="input-field" placeholder="Base Salary" value={payrollForm.base_salary} onChange={e => setPayrollForm({...payrollForm, base_salary: e.target.value})} style={{ marginBottom: '16px' }} />
+            <input type="number" className="input-field" placeholder="Bonus" value={payrollForm.bonus} onChange={e => setPayrollForm({...payrollForm, bonus: e.target.value})} style={{ marginBottom: '16px' }} />
+            <LoadingButton onClick={handleAddPayroll} loading={processing} style={{ width: '100%' }}>Save Record</LoadingButton>
+          </motion.div>
+        </div>
+      )}
       {showImportModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
           <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '600px', padding: '32px' }}>
@@ -842,8 +799,47 @@ const AdminDashboard = () => {
               <h3>{importType === 'enrollment' ? 'Bulk Course Enrollment' : `Bulk Import ${importType}s`}</h3>
               <button onClick={() => setShowImportModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button>
             </div>
-            <textarea className="input-field" rows={8} style={{ marginBottom: '24px', fontFamily: 'monospace' }} value={csvData} onChange={e => setCsvData(e.target.value)} placeholder="name, roll_no, department" />
-            <LoadingButton onClick={handleBulkImport} loading={processing} style={{ width: '100%' }}>Execute Bulk Action</LoadingButton>
+            <textarea className="input-field" rows={8} style={{ marginBottom: '24px', fontFamily: 'monospace', fontSize: '12px' }} value={csvData} onChange={e => setCsvData(e.target.value)} placeholder="Header1, Header2, ...&#10;Value1, Value2, ..." />
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button onClick={() => setShowImportModal(false)} className="btn-secondary" style={{ flex: 1 }}>Cancel</button>
+              <button onClick={handlePreviewCSV} className="btn-primary" style={{ flex: 1, background: 'linear-gradient(135deg, var(--accent-purple), var(--accent-cyan))' }}>Preview Data</button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+
+      {showPreview && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.9)', backdropFilter: 'blur(15px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1100, padding: '20px' }}>
+          <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '800px', padding: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <div>
+                <h3 style={{ fontSize: '20px' }}>Import Preview</h3>
+                <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Review the first 10 rows before committing to database.</p>
+              </div>
+              <button onClick={() => setShowPreview(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+            
+            <div style={{ maxHeight: '400px', overflowY: 'auto', marginBottom: '24px', border: '1px solid var(--glass-border)', borderRadius: '8px' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                <thead>
+                  <tr style={{ background: 'rgba(255,255,255,0.05)', textAlign: 'left' }}>
+                    {previewData.length > 0 && Object.keys(previewData[0]).map(k => <th key={k} style={{ padding: '12px' }}>{k.toUpperCase()}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {previewData.map((row, i) => (
+                    <tr key={i} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                      {Object.values(row).map((v: any, j) => <td key={j} style={{ padding: '12px' }}>{v}</td>)}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button onClick={() => setShowPreview(false)} className="btn-secondary" style={{ flex: 1 }}>Back to Edit</button>
+              <LoadingButton onClick={handleBulkImport} loading={processing} style={{ flex: 1, background: 'var(--success)' }}>Confirm & Import All</LoadingButton>
+            </div>
           </motion.div>
         </div>
       )}
@@ -863,8 +859,11 @@ const StatCard = ({ label, value, icon, color }: any) => (
     </div>
   </div>
 )
-const ImportCard = ({ label, onClick }: any) => (
-  <div onClick={onClick} className="glass-card" style={{ padding: '24px', cursor: 'pointer', textAlign: 'center', border: '1px solid var(--glass-border)', transition: '0.2s' }}><Plus size={24} style={{ marginBottom: '12px', color: 'var(--accent-cyan)' }} /><p style={{ fontWeight: '600', fontSize: '14px' }}>{label}</p></div>
+const ImportCard = ({ label, onClick, icon }: any) => (
+  <div onClick={onClick} className="glass-card" style={{ padding: '24px', cursor: 'pointer', textAlign: 'center', border: '1px solid var(--glass-border)', transition: '0.2s', background: 'rgba(255,255,255,0.02)' }}>
+    <div style={{ marginBottom: '12px', color: 'var(--accent-cyan)' }}>{icon || <Plus size={24} />}</div>
+    <p style={{ fontWeight: '600', fontSize: '14px' }}>{label}</p>
+  </div>
 )
 
 export default AdminDashboard

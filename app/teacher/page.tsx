@@ -26,6 +26,8 @@ const TeacherDashboard = () => {
   const [selectedSemester, setSelectedSemester] = useState<any>(null)
   const [selectedSection, setSelectedSection] = useState<any>(null)
   const [selectedSubject, setSelectedSubject] = useState<any>(null)
+  const [teacherClasses, setTeacherClasses] = useState<any[]>([])
+  const [selectedClass, setSelectedClass] = useState<any>(null)
   
   const [students, setStudents] = useState<any[]>([])
   const [attendanceRecords, setAttendanceRecords] = useState<Record<string, 'present' | 'absent' | null>>({})
@@ -123,25 +125,26 @@ const TeacherDashboard = () => {
         .select(`
           id, 
           subjects (id, name, code, semester_id),
-          sections (id, name, semester_id)
+          sections (id, name, semester_id, semesters (id, term_number, academic_year, programs (id, name)))
         `)
         .eq('teacher_id', user.user.id)
         
       if (!error && assignments && assignments.length > 0) {
-        // Map assignments to a structured format
-        const classList = assignments.map((a: any) => ({
+        const classes = assignments.map((a: any) => ({
           id: a.id,
           subject: a.subjects,
-          section: a.sections
+          section: a.sections,
+          semester: a.sections.semesters,
+          program: a.sections.semesters.programs,
+          label: `${a.sections.semesters.programs.name} • Sem ${a.sections.semesters.term_number} • Sec ${a.sections.name} • ${a.subjects.name}`
         }))
         
-        setSubjects(classList.map(c => c.subject))
-        setSections(classList.map(c => c.section))
-        
-        // Auto-select first class if nothing selected
-        if (classList.length > 0 && !selectedSubject) {
-          setSelectedSubject(classList[0].subject)
-          setSelectedSection(classList[0].section)
+        setTeacherClasses(classes)
+        if (classes.length > 0) {
+          setSelectedClass(classes[0])
+          setSelectedSubject(classes[0].subject)
+          setSelectedSection(classes[0].section)
+          setSelectedSemester(classes[0].semester)
         }
       }
     } catch (e) {
@@ -150,6 +153,7 @@ const TeacherDashboard = () => {
   }
 
   const fetchStudents = async () => {
+    // If we have a selected section, fetch from student_enrollments. Otherwise fallback to old profiles fetch.
     if (selectedSection) {
        const { data, error } = await supabase.from('student_enrollments')
          .select('profiles(*)')
@@ -164,7 +168,15 @@ const TeacherDashboard = () => {
          return
        }
     }
-    setStudents([]) // No shared global student list for teachers
+
+    // Fallback
+    const { data } = await supabase.from('profiles').select('*').eq('role', 'student').order('roll_no', { ascending: true })
+    if (data) {
+      setStudents(data)
+      const initialAttendance: Record<string, any> = {}
+      data.forEach(s => initialAttendance[s.id] = 'present')
+      setAttendanceRecords(initialAttendance)
+    }
   }
 
   const filteredStudents = useMemo(() => {
@@ -397,30 +409,35 @@ const TeacherDashboard = () => {
                       <span style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Class Active • {selectedDate} (Session {selectedSession})</span>
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', alignItems: 'center' }}>
-                     <div style={{ fontSize: '12px', color: 'var(--text-muted)', marginRight: '8px' }}>My Classes:</div>
-                     {subjects.length > 0 ? (
-                       <div style={{ display: 'flex', gap: '8px' }}>
-                          {subjects.map((sub, idx) => (
-                             <button 
-                               key={`${sub.id}-${sections[idx]?.id}`}
-                               onClick={() => {
-                                  setSelectedSubject(sub)
-                                  setSelectedSection(sections[idx])
-                               }}
-                               className={selectedSubject?.id === sub.id && selectedSection?.id === sections[idx]?.id ? 'btn-primary' : 'btn-secondary'}
-                               style={{ padding: '6px 12px', fontSize: '11px', borderRadius: '100px', background: selectedSubject?.id === sub.id && selectedSection?.id === sections[idx]?.id ? '' : 'rgba(255,255,255,0.05)', border: '1px solid', borderColor: selectedSubject?.id === sub.id && selectedSection?.id === sections[idx]?.id ? 'var(--accent-cyan)' : 'var(--glass-border)' }}
-                             >
-                                {sub.name} (Sec {sections[idx]?.name})
-                             </button>
-                          ))}
-                       </div>
+                  <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                     {/* Smart Class Switcher for Faculty */}
+                     {teacherClasses.length > 0 ? (
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <span style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600' }}>MY CLASSES:</span>
+                          <select 
+                            className="input-field" 
+                            value={selectedClass?.id || ''} 
+                            onChange={(e) => {
+                              const cls = teacherClasses.find(c => c.id === e.target.value)
+                              if (cls) {
+                                setSelectedClass(cls)
+                                setSelectedSubject(cls.subject)
+                                setSelectedSection(cls.section)
+                                setSelectedSemester(cls.semester)
+                              }
+                            }} 
+                            style={{ background: 'rgba(255,255,255,0.05)', color: 'white', width: 'auto', padding: '8px 16px', borderRadius: '100px', fontSize: '13px', border: '1px solid var(--accent-cyan)' }}
+                          >
+                            {teacherClasses.map(c => <option key={c.id} value={c.id} style={{background: '#1a1a1a'}}>{c.label}</option>)}
+                          </select>
+                        </div>
                      ) : (
-                       <p style={{ fontSize: '12px', color: 'var(--error)' }}>No classes assigned</p>
+                       <select className="input-field" value={selectedCourse?.id} onChange={(e) => setSelectedCourse(courses.find(c => c.id === e.target.value))} style={{ background: 'rgba(255,255,255,0.05)', color: 'white', width: 'auto', padding: '8px 16px', borderRadius: '100px', fontSize: '13px' }}>
+                          {courses.map(c => <option key={c.id} value={c.id} style={{background: '#1a1a1a'}}>{c.name}</option>)}
+                       </select>
                      )}
-                     <div style={{ width: '1px', height: '20px', background: 'var(--glass-border)', margin: '0 8px' }} />
-                     <input type="date" className="input-field" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} style={{ width: 'auto', padding: '6px 12px', borderRadius: '100px', fontSize: '12px', height: '32px' }} />
-                     <select className="input-field" value={selectedSession} onChange={(e) => setSelectedSession(Number(e.target.value))} style={{ width: 'auto', padding: '6px 12px', borderRadius: '100px', fontSize: '12px', height: '32px' }}>
+                     <input type="date" className="input-field desktop-only" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} style={{ width: 'auto', padding: '8px 16px', borderRadius: '100px', fontSize: '13px' }} />
+                     <select className="input-field desktop-only" value={selectedSession} onChange={(e) => setSelectedSession(Number(e.target.value))} style={{ width: 'auto', padding: '8px 16px', borderRadius: '100px', fontSize: '13px' }}>
                         {[1,2,3,4,5,6,7,8].map(s => <option key={s} value={s} style={{background: '#1a1a1a'}}>Session {s}</option>)}
                      </select>
                   </div>
