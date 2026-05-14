@@ -371,36 +371,55 @@ const TeacherDashboard = () => {
   }
 
   const handleGenerateSession = async (duration: number) => {
-    if (!selectedClass || !selectedSubject) return
-    setSaving(true)
-    
-    // Get Teacher GPS
-    let lat = null, lng = null
-    try {
-      const pos: any = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej))
-      lat = pos.coords.latitude
-      lng = pos.coords.longitude
-    } catch (e) { console.log('Location access denied') }
-
-    const code = `${selectedSubject.code.slice(0, 4).toUpperCase()}${Math.floor(10000 + Math.random() * 90000)}`
-    const expires = new Date(Date.now() + duration * 1000)
-    
-    const { data, error } = await supabase.from('attendance_sessions').insert([{
-      allocation_id: selectedClass.id,
-      teacher_id: teacherProfile.id,
-      code,
-      expires_at: expires.toISOString(),
-      latitude: lat,
-      longitude: lng,
-      is_active: true
-    }]).select().single()
-
-    if (data) {
-      setActiveSession(data)
-      setTimeLeft(duration)
-      setShowQR(true)
+    if (!selectedClass || !selectedSubject || !teacherProfile) {
+      setMessage({ text: 'Please select a class and subject first.', type: 'error' })
+      return
     }
-    setSaving(false)
+    
+    setSaving(true)
+    try {
+      // Get Teacher GPS
+      let lat = null, lng = null
+      try {
+        const pos: any = await new Promise((res, rej) => 
+          navigator.geolocation.getCurrentPosition(res, rej, { timeout: 5000, enableHighAccuracy: true })
+        )
+        lat = pos.coords.latitude
+        lng = pos.coords.longitude
+      } catch (e) { 
+        console.log('Location access denied or timeout') 
+      }
+
+      const subCode = (selectedSubject.code || 'SUBJ').slice(0, 4).toUpperCase()
+      const randNum = Math.floor(10000 + Math.random() * 90000)
+      const code = `${subCode}${randNum}`
+      const expires = new Date(Date.now() + duration * 1000)
+      
+      const { data, error } = await supabase.from('attendance_sessions').insert([{
+        allocation_id: selectedClass.id,
+        teacher_id: teacherProfile.id,
+        code,
+        expires_at: expires.toISOString(),
+        latitude: lat,
+        longitude: lng,
+        is_active: true
+      }]).select().single()
+
+      if (error) throw error
+
+      if (data) {
+        setActiveSession(data)
+        setTimeLeft(duration)
+        setShowQR(true)
+        setMessage({ text: 'Attendance code generated successfully!', type: 'success' })
+      }
+    } catch (err: any) {
+      console.error('Session generation error:', err)
+      setMessage({ text: `Failed to generate code: ${err.message || 'Unknown error'}`, type: 'error' })
+    } finally {
+      setSaving(false)
+      setTimeout(() => setMessage({ text: '', type: '' }), 3000)
+    }
   }
 
   // Real-time listener for Smart Attendance
