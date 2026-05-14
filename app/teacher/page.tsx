@@ -708,6 +708,49 @@ const TeacherDashboard = () => {
                         <Activity size={48} color="var(--accent-purple)" style={{ marginBottom: '24px' }} />
                         <h2>Smart Classroom Session</h2>
                         <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>Generate a temporary code for students to mark their attendance via GPS & unique session ID.</p>
+                        
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '24px' }}>
+                          <div style={{ textAlign: 'left' }}>
+                            <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700', marginBottom: '8px' }}>SELECT CLASS</p>
+                            <select 
+                              className="input-field" 
+                              style={{ width: '100%' }}
+                              value={selectedClass?.id || ''} 
+                              onChange={(e) => {
+                                const cls = teacherClasses.find(c => c.id === e.target.value)
+                                if (cls) {
+                                  setSelectedClass(cls)
+                                  setSelectedSubject(cls.subject)
+                                  setSelectedSection(cls.section)
+                                  setSelectedSemester(cls.semester)
+                                }
+                              }}
+                            >
+                              <option value="">Select Class</option>
+                              {teacherClasses.map(cls => (
+                                <option key={cls.id} value={cls.id}>{cls.program.name} - {cls.section.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div style={{ textAlign: 'left' }}>
+                            <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontWeight: '700', marginBottom: '8px' }}>SELECT SUBJECT</p>
+                            <select 
+                              className="input-field" 
+                              style={{ width: '100%' }}
+                              value={selectedSubject?.id || ''}
+                              onChange={(e) => {
+                                const sub = teacherClasses.find(c => c.subject.id === e.target.value)?.subject
+                                if (sub) setSelectedSubject(sub)
+                              }}
+                            >
+                              <option value="">Select Subject</option>
+                              {teacherClasses.map(cls => (
+                                <option key={cls.subject.id} value={cls.subject.id}>{cls.subject.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '32px' }}>
                            <button onClick={() => handleGenerateSession(30)} className="btn-secondary" style={{ padding: '12px' }}>30 Sec</button>
                            <button onClick={() => handleGenerateSession(60)} className="btn-secondary" style={{ padding: '12px' }}>60 Sec</button>
