@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { 
   PieChart, Calendar, Book, Bell, User, LogOut, 
-  Download, FileText, Send, Clock, CheckCircle2, ChevronRight, Trophy, Landmark, Bookmark
+  Download, FileText, Send, Clock, CheckCircle2, ChevronRight, Trophy, Landmark, Bookmark, Activity, Shield
 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -23,6 +23,9 @@ const StudentDashboard = () => {
   const [studentProfile, setStudentProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isActionLoading, setIsActionLoading] = useState(false)
+  const [attendanceCode, setAttendanceCode] = useState('')
+  const [attendanceStatus, setAttendanceStatus] = useState<any>(null)
+  const [joinMessage, setJoinMessage] = useState({ text: '', type: '' })
   
   const router = useRouter()
   const supabase = createClient()
@@ -76,6 +79,90 @@ const StudentDashboard = () => {
     }
 
     setLoading(false)
+  }
+
+  const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371e3 // metres
+    const φ1 = lat1 * Math.PI / 180
+    const φ2 = lat2 * Math.PI / 180
+    const Δφ = (lat2 - lat1) * Math.PI / 180
+    const Δλ = (lon2 - lon1) * Math.PI / 180
+    const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) + Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) * Math.sin(Δλ / 2)
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+    return R * c
+  }
+
+  const handleJoinAttendance = async () => {
+    if (!attendanceCode) return
+    setIsActionLoading(true)
+    setJoinMessage({ text: 'Verifying session...', type: 'loading' })
+
+    try {
+      // 1. Fetch Session
+      const { data: session, error: sErr } = await supabase.from('attendance_sessions')
+        .select('*, sections(*, semesters(*, programs(*)))')
+        .eq('code', attendanceCode.toUpperCase())
+        .eq('is_active', true)
+        .gt('expires_at', new Date().toISOString())
+        .single()
+
+      if (sErr || !session) {
+        setJoinMessage({ text: 'Invalid or expired code.', type: 'error' })
+        setIsActionLoading(false)
+        return
+      }
+
+      // 2. GPS Check
+      setJoinMessage({ text: 'Validating location...', type: 'loading' })
+      let studentLat = null, studentLng = null
+      try {
+        const pos: any = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true }))
+        studentLat = pos.coords.latitude
+        studentLng = pos.coords.longitude
+      } catch (e) {
+        setJoinMessage({ text: 'GPS required for smart attendance.', type: 'error' })
+        setIsActionLoading(false)
+        return
+      }
+
+      let gpsStatus = 'verified'
+      if (session.latitude && session.longitude) {
+        const dist = calculateDistance(studentLat, studentLng, session.latitude, session.longitude)
+        if (dist > session.radius_meters) {
+          setJoinMessage({ text: `Out of range (${Math.round(dist)}m). Must be within ${session.radius_meters}m.`, type: 'error' })
+          gpsStatus = 'out_of_range'
+          // We still log the attempt as a mismatch if needed, or block it. 
+          // Re-reading request: "Rejected: outside building"
+          setIsActionLoading(false)
+          return 
+        }
+      }
+
+      // 3. Mark Attendance
+      const { error: aErr } = await supabase.from('attendance').insert([{
+        student_id: studentProfile.id,
+        date: new Date().toISOString().split('T')[0],
+        status: 'present',
+        method: 'smart_code',
+        session_id: session.id,
+        gps_status: gpsStatus,
+        latitude: studentLat,
+        longitude: studentLng,
+        section_id: session.sections.id
+      }])
+
+      if (aErr) {
+        if (aErr.code === '23505') setJoinMessage({ text: 'Already marked for today!', type: 'error' })
+        else setJoinMessage({ text: 'Error marking attendance.', type: 'error' })
+      } else {
+        setJoinMessage({ text: 'Attendance marked successfully!', type: 'success' })
+        setAttendanceStatus('success')
+        fetchData()
+      }
+    } catch (e) {
+      setJoinMessage({ text: 'An unexpected error occurred.', type: 'error' })
+    }
+    setIsActionLoading(false)
   }
 
   const handleLogout = async () => { 
@@ -216,6 +303,42 @@ const StudentDashboard = () => {
             </motion.div>
           )}
 
+          {activeTab === 'attendance' && (
+            <motion.div key="attendance" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
+              <div className="glass-card" style={{ padding: '40px', textAlign: 'center' }}>
+                <div style={{ width: '80px', height: '80px', borderRadius: '20px', background: 'rgba(139, 92, 246, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px', border: '1px solid var(--accent-purple)' }}>
+                   <Activity size={40} color="var(--accent-purple)" />
+                </div>
+                <h2>Smart Attendance Join</h2>
+                <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>Enter the temporary code shared by your teacher or scan the QR code to mark your attendance.</p>
+                
+                <div style={{ maxWidth: '300px', margin: '0 auto' }}>
+                   <input 
+                     className="input-field" 
+                     placeholder="ENTER CODE (e.g. AI24643)" 
+                     style={{ textAlign: 'center', fontSize: '24px', letterSpacing: '4px', textTransform: 'uppercase', marginBottom: '20px', border: '2px solid var(--glass-border)' }}
+                     value={attendanceCode}
+                     onChange={e => setAttendanceCode(e.target.value)}
+                     onPaste={(e) => e.preventDefault()}
+                     autoComplete="off"
+                   />
+                   <LoadingButton onClick={handleJoinAttendance} loading={isActionLoading} style={{ width: '100%' }}>Mark Attendance</LoadingButton>
+                </div>
+
+                {joinMessage.text && (
+                  <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} style={{ marginTop: '24px', padding: '12px', borderRadius: '12px', background: joinMessage.type === 'error' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(16, 185, 129, 0.1)', color: joinMessage.type === 'error' ? 'var(--error)' : 'var(--success)', fontSize: '14px', border: `1px solid ${joinMessage.type === 'error' ? 'var(--error)' : 'var(--success)'}20` }}>
+                    {joinMessage.text}
+                  </motion.div>
+                )}
+
+                <div style={{ marginTop: '40px', paddingTop: '32px', borderTop: '1px solid var(--glass-border)', display: 'flex', justifyContent: 'center', gap: '24px' }}>
+                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'var(--text-muted)' }}><Shield size={14} /> GPS REQUIRED</div>
+                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '11px', color: 'var(--text-muted)' }}><Clock size={14} /> TIME SENSITIVE</div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {activeTab === 'profile' && (
             <motion.div key="profile" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
               <div className="glass-card" style={{ padding: '40px', textAlign: 'center' }}>
@@ -243,6 +366,7 @@ const StudentDashboard = () => {
 
       <nav className="glass-card" style={{ position: 'fixed', bottom: '20px', left: '20px', right: '20px', height: '70px', borderRadius: '25px', display: 'flex', justifyContent: 'space-around', alignItems: 'center', padding: '0 20px', zIndex: 100 }}>
         <NavItem icon={<PieChart size={22} />} active={activeTab === 'overview'} onClick={() => setActiveTab('overview')} />
+        <NavItem icon={<Activity size={22} />} active={activeTab === 'attendance'} onClick={() => setActiveTab('attendance')} />
         <NavItem icon={<Book size={22} />} active={activeTab === 'courses'} onClick={() => setActiveTab('courses')} />
         <NavItem icon={<Trophy size={22} />} active={activeTab === 'results'} onClick={() => setActiveTab('results')} />
         <NavItem icon={<Landmark size={22} />} active={activeTab === 'finance'} onClick={() => setActiveTab('finance')} />

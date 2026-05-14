@@ -22,6 +22,14 @@ const TeacherDashboard = () => {
   // New University Hierarchy State
   const [semesters, setSemesters] = useState<any[]>([])
   const [sections, setSections] = useState<any[]>([])
+  const [attendanceMethod, setAttendanceMethod] = useState<'manual' | 'smart'>('manual')
+  const [activeSession, setActiveSession] = useState<any>(null)
+  const [timeLeft, setTimeLeft] = useState(0)
+  const [showQR, setShowQR] = useState(false)
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [importPreview, setImportPreview] = useState<any[]>([])
+  const [importErrors, setImportErrors] = useState<string[]>([])
+  const [importStats, setImportStats] = useState({ total: 0, valid: 0, duplicates: 0 })
   const [subjects, setSubjects] = useState<any[]>([])
   const [selectedSemester, setSelectedSemester] = useState<any>(null)
   const [selectedSection, setSelectedSection] = useState<any>(null)
@@ -354,6 +362,115 @@ const TeacherDashboard = () => {
     setTimeout(() => setMessage({ text: '', type: '' }), 3000)
   }
 
+  const handleGenerateSession = async (duration: number) => {
+    if (!selectedClass || !selectedSubject) return
+    setSaving(true)
+    
+    // Get Teacher GPS
+    let lat = null, lng = null
+    try {
+      const pos: any = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej))
+      lat = pos.coords.latitude
+      lng = pos.coords.longitude
+    } catch (e) { console.log('Location access denied') }
+
+    const code = `${selectedSubject.code.slice(0, 4).toUpperCase()}${Math.floor(10000 + Math.random() * 90000)}`
+    const expires = new Date(Date.now() + duration * 1000)
+    
+    const { data, error } = await supabase.from('attendance_sessions').insert([{
+      allocation_id: selectedClass.id,
+      teacher_id: teacherProfile.id,
+      code,
+      expires_at: expires.toISOString(),
+      latitude: lat,
+      longitude: lng,
+      is_active: true
+    }]).select().single()
+
+    if (data) {
+      setActiveSession(data)
+      setTimeLeft(duration)
+      setShowQR(true)
+    }
+    setSaving(false)
+  }
+
+  useEffect(() => {
+    if (timeLeft > 0) {
+      const timer = setInterval(() => setTimeLeft(prev => prev - 1), 1000)
+      return () => clearInterval(timer)
+    } else if (activeSession) {
+      setActiveSession(null)
+    }
+  }, [timeLeft])
+
+  const handleFileSelect = (e: any) => {
+    const file = e.target.files[0]
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = (event: any) => {
+      const text = event.target.result
+      const rows = text.split('\n').filter((r: any) => r.trim())
+      const headers = rows[0].toLowerCase().split(',').map((h: any) => h.trim())
+      
+      const dataRows = rows.slice(1).map((row: any) => {
+        const values = row.split(',').map((v: any) => v.trim())
+        const obj: any = {}
+        headers.forEach((h: any, i: any) => obj[h] = values[i])
+        return obj
+      })
+
+      // Validation
+      const errors: string[] = []
+      let valid = 0, duplicates = 0
+      const processed = dataRows.map((r: any, idx: number) => {
+        const hasName = !!(r.name || r['student name'])
+        const hasRoll = !!(r.roll_no || r['roll number'])
+        if (!hasName || !hasRoll) {
+           errors.push(`Row ${idx + 2}: Missing Name or Roll Number`)
+           return { ...r, status: 'error' }
+        }
+        valid++
+        return { ...r, status: 'valid' }
+      })
+
+      setImportPreview(processed)
+      setImportErrors(errors)
+      setImportStats({ total: processed.length, valid, duplicates: 0 })
+    }
+    reader.readAsText(file)
+  }
+
+  const handleConfirmImport = async () => {
+    if (!selectedSection) return
+    setSaving(true)
+    try {
+      for (const row of importPreview.filter(r => r.status === 'valid')) {
+        const name = row.name || row['student name']
+        const roll = row.roll_no || row['roll number']
+        
+        // 1. Upsert Profile
+        const { data: profile } = await supabase.from('profiles').upsert({
+          name, roll_no: roll, role: 'student'
+        }, { onConflict: 'roll_no' }).select().single()
+
+        if (profile) {
+          // 2. Enroll in current section
+          await supabase.from('student_enrollments').upsert({
+            student_id: profile.id,
+            section_id: selectedSection.id
+          })
+        }
+      }
+      setShowImportModal(false)
+      fetchStudents()
+      setMessage({ text: 'Roster imported successfully', type: 'success' })
+    } catch (e) {
+      setMessage({ text: 'Import failed', type: 'error' })
+    }
+    setSaving(false)
+  }
+
   const handleLogout = async () => { 
     setSaving(true)
     await supabase.auth.signOut(); 
@@ -476,6 +593,11 @@ const TeacherDashboard = () => {
                     </div>
                   </div>
                   <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                     <div className="segmented-control" style={{ marginRight: '12px' }}>
+                        <button onClick={() => setAttendanceMethod('manual')} style={{ padding: '6px 16px', borderRadius: '100px', border: 'none', background: attendanceMethod === 'manual' ? 'var(--accent-cyan)' : 'transparent', color: 'white', fontSize: '12px', cursor: 'pointer', transition: '0.3s' }}>Manual</button>
+                        <button onClick={() => setAttendanceMethod('smart')} style={{ padding: '6px 16px', borderRadius: '100px', border: 'none', background: attendanceMethod === 'smart' ? 'var(--accent-purple)' : 'transparent', color: 'white', fontSize: '12px', cursor: 'pointer', transition: '0.3s' }}>Smart</button>
+                     </div>
+                     <button onClick={() => setShowImportModal(true)} className="btn-secondary" style={{ padding: '6px 16px', borderRadius: '100px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '12px' }}><Upload size={14} /> Import Roster</button>
                      {/* Smart Class Switcher for Faculty */}
                      {teacherClasses.length > 0 ? (
                         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -514,6 +636,69 @@ const TeacherDashboard = () => {
                     <Sparkles size={18} /> {message.text}
                   </motion.div>
                 )}
+                
+                {attendanceMethod === 'smart' ? (
+                  <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-card" style={{ padding: '40px', textAlign: 'center', marginBottom: '40px', border: '2px dashed var(--glass-border)' }}>
+                    {!activeSession ? (
+                      <div style={{ maxWidth: '500px', margin: '0 auto' }}>
+                        <Activity size={48} color="var(--accent-purple)" style={{ marginBottom: '24px' }} />
+                        <h2>Smart Classroom Session</h2>
+                        <p style={{ color: 'var(--text-muted)', marginBottom: '32px' }}>Generate a temporary code for students to mark their attendance via GPS & unique session ID.</p>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '32px' }}>
+                           <button onClick={() => handleGenerateSession(30)} className="btn-secondary" style={{ padding: '12px' }}>30 Sec</button>
+                           <button onClick={() => handleGenerateSession(60)} className="btn-secondary" style={{ padding: '12px' }}>60 Sec</button>
+                           <button onClick={() => handleGenerateSession(90)} className="btn-secondary" style={{ padding: '12px' }}>90 Sec</button>
+                        </div>
+                        <LoadingButton onClick={() => handleGenerateSession(120)} loading={saving} style={{ width: '100%' }}>Generate Active Session</LoadingButton>
+                      </div>
+                    ) : (
+                      <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+                        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '32px' }}>
+                          <div style={{ position: 'relative', width: '150px', height: '150px' }}>
+                            <svg style={{ transform: 'rotate(-90deg)', width: '150px', height: '150px' }}>
+                              <circle cx="75" cy="75" r="70" stroke="rgba(255,255,255,0.1)" strokeWidth="8" fill="none" />
+                              <circle cx="75" cy="75" r="70" stroke="var(--accent-purple)" strokeWidth="8" fill="none" strokeDasharray="440" strokeDashoffset={440 - (timeLeft / 120) * 440} style={{ transition: 'stroke-dashoffset 1s linear' }} />
+                            </svg>
+                            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}>
+                              <span style={{ fontSize: '32px', fontWeight: '800' }}>{timeLeft}</span>
+                              <span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>SECONDS</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: '32px', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+                           <div className="glass-card" style={{ padding: '24px 40px', background: 'rgba(0,0,0,0.3)', border: '2px solid var(--accent-purple)' }}>
+                              <p style={{ fontSize: '12px', color: 'var(--accent-purple)', fontWeight: '800', letterSpacing: '2px', marginBottom: '8px' }}>ATTENDANCE CODE</p>
+                              <h1 style={{ fontSize: '48px', letterSpacing: '8px', color: 'white' }} onPaste={(e) => e.preventDefault()}>{activeSession.code}</h1>
+                           </div>
+                           
+                           {showQR && (
+                             <div className="glass-card" style={{ padding: '16px', background: 'white', borderRadius: '16px' }}>
+                               <img src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${activeSession.code}`} alt="QR Code" style={{ width: '150px', height: '150px' }} />
+                             </div>
+                           )}
+                        </div>
+
+                        <div style={{ marginTop: '40px', display: 'flex', justifyContent: 'center', gap: '16px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', borderRadius: '100px', fontSize: '12px' }}>
+                            <div className="status-dot-active" /> GPS VALIDATION ACTIVE
+                          </div>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--error)', borderRadius: '100px', fontSize: '12px' }}>
+                            <Shield size={14} /> ANTI-CHEAT ON
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                ) : (
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px', marginBottom: '40px' }} className="responsive-grid">
+                    <StatCard label="Total Enrolled" value={students.length} icon={<Users color="var(--accent-cyan)" />} color="var(--accent-cyan)" />
+                    <StatCard label="Present Today" value={Object.values(attendanceRecords).filter(v => v === 'present').length} icon={<UserCheck color="var(--success)" />} color="var(--success)" />
+                    <StatCard label="Absent Today" value={Object.values(attendanceRecords).filter(v => v === 'absent').length} icon={<UserX color="var(--error)" />} color="var(--error)" />
+                    <StatCard label="Attendance %" value={`${students.length ? Math.round((Object.values(attendanceRecords).filter(v => v === 'present').length / students.length) * 100) : 0}%`} icon={<BarChart color="var(--accent-purple)" />} color="var(--accent-purple)" />
+                  </div>
+                )}
+
                 {/* Advanced Analytics Grid */}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '32px' }}>
                   <motion.div whileHover={{ scale: 1.02 }} className="glass-card" style={{ padding: '20px', position: 'relative', overflow: 'hidden' }}>
@@ -957,6 +1142,77 @@ const TeacherDashboard = () => {
     </div>
   )
 }
+
+      {showImportModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '600px', padding: '32px', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <h3>Import Student Roster</h3>
+              <button onClick={() => setShowImportModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button>
+            </div>
+            
+            {!importPreview.length ? (
+              <div style={{ border: '2px dashed var(--glass-border)', padding: '40px', textAlign: 'center', borderRadius: '16px' }}>
+                <Upload size={40} color="var(--accent-purple)" style={{ marginBottom: '16px' }} />
+                <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>Select a CSV file containing Name and Roll Number columns.</p>
+                <input type="file" accept=".csv" onChange={handleFileSelect} style={{ display: 'none' }} id="csv-upload" />
+                <label htmlFor="csv-upload" className="btn-primary" style={{ cursor: 'pointer' }}>Choose File</label>
+              </div>
+            ) : (
+              <div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px', marginBottom: '24px' }}>
+                   <div style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', textAlign: 'center' }}>
+                     <p style={{ fontSize: '10px', color: 'var(--text-muted)' }}>TOTAL ROWS</p>
+                     <p style={{ fontSize: '18px', fontWeight: '800' }}>{importStats.total}</p>
+                   </div>
+                   <div style={{ padding: '12px', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
+                     <p style={{ fontSize: '10px', color: 'var(--success)' }}>VALID</p>
+                     <p style={{ fontSize: '18px', fontWeight: '800', color: 'var(--success)' }}>{importStats.valid}</p>
+                   </div>
+                   <div style={{ padding: '12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', textAlign: 'center' }}>
+                     <p style={{ fontSize: '10px', color: 'var(--error)' }}>ERRORS</p>
+                     <p style={{ fontSize: '18px', fontWeight: '800', color: 'var(--error)' }}>{importErrors.length}</p>
+                   </div>
+                </div>
+
+                {importErrors.length > 0 && (
+                  <div style={{ marginBottom: '24px', padding: '12px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', maxHeight: '100px', overflowY: 'auto' }}>
+                    {importErrors.map((err, i) => <p key={i} style={{ fontSize: '12px', color: 'var(--error)', marginBottom: '4px' }}>• {err}</p>)}
+                  </div>
+                )}
+
+                <div style={{ maxHeight: '300px', overflowY: 'auto', marginBottom: '24px', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
+                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                     <thead style={{ background: 'rgba(255,255,255,0.05)', position: 'sticky', top: 0 }}>
+                       <tr>
+                         <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px' }}>Name</th>
+                         <th style={{ padding: '10px', textAlign: 'left', fontSize: '12px' }}>Roll No</th>
+                         <th style={{ padding: '10px', textAlign: 'center', fontSize: '12px' }}>Status</th>
+                       </tr>
+                     </thead>
+                     <tbody>
+                        {importPreview.map((row, i) => (
+                          <tr key={i} style={{ borderBottom: '1px solid var(--glass-border)' }}>
+                            <td style={{ padding: '10px', fontSize: '12px' }}>{row.name || row['student name']}</td>
+                            <td style={{ padding: '10px', fontSize: '12px' }}>{row.roll_no || row['roll number']}</td>
+                            <td style={{ padding: '10px', textAlign: 'center' }}>
+                              {row.status === 'valid' ? <Check size={14} color="var(--success)" /> : <X size={14} color="var(--error)" />}
+                            </td>
+                          </tr>
+                        ))}
+                     </tbody>
+                   </table>
+                </div>
+
+                <div style={{ display: 'flex', gap: '12px' }}>
+                  <button onClick={() => setImportPreview([])} className="btn-secondary" style={{ flex: 1 }}>Reset</button>
+                  <LoadingButton onClick={handleConfirmImport} loading={saving} style={{ flex: 2 }}>Confirm & Import {importStats.valid} Students</LoadingButton>
+                </div>
+              </div>
+            )}
+          </motion.div>
+        </div>
+      )}
 
 const AttendanceToggle = ({ status, onToggle }: { status: 'present' | 'absent' | null, onToggle: (val: 'present' | 'absent') => void }) => {
   return (

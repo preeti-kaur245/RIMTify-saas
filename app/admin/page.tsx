@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Users, UserPlus, LogOut, LayoutDashboard, Settings, Shield, 
   BookOpen, CreditCard, Search, Trash2, Edit3, Filter, 
-  MoreVertical, Upload, FileText, Plus, X, Check, AlertTriangle, Book, Landmark, Bookmark, Bell, DollarSign, Megaphone, Loader2, TrendingUp, ArrowUpRight, Menu, Clock, Link as LinkIcon, AlertCircle, ChevronDown, ChevronRight
+  MoreVertical, Upload, FileText, Plus, X, Check, AlertTriangle, Book, Landmark, Bookmark, Bell, DollarSign, Megaphone, Loader2, TrendingUp, ArrowUpRight, Menu, Clock, Link as LinkIcon, AlertCircle, ChevronDown, ChevronRight, Activity
 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -68,6 +68,19 @@ const AdminDashboard = () => {
   const supabase = createClient()
 
   useEffect(() => { fetchData() }, [])
+
+  const [settings, setSettings] = useState<any>({ gps_enabled: true, radius: 50, default_duration: 60, qr_enabled: true, security_level: 'high' })
+
+  const fetchSettings = async () => {
+    const { data } = await supabase.from('university_settings').select('*').eq('key', 'smart_attendance').single()
+    if (data) setSettings(data.value)
+  }
+
+  const handleUpdateSettings = async (newVal: any) => {
+    const updated = { ...settings, ...newVal }
+    setSettings(updated)
+    await supabase.from('university_settings').upsert({ key: 'smart_attendance', value: updated })
+  }
 
   const fetchData = async () => {
     setLoading(true)
@@ -385,6 +398,7 @@ const AdminDashboard = () => {
           <SidebarItem icon={<LayoutDashboard size={18} />} label="Academic Structure" active={activeTab === 'hierarchy'} onClick={() => { setActiveTab('hierarchy'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<Edit3 size={18} />} label="Subject Manager" active={activeTab === 'subjects'} onClick={() => { setActiveTab('subjects'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<Shield size={18} />} label="Faculty Assignment" active={activeTab === 'faculty'} onClick={() => { setActiveTab('faculty'); setIsSidebarOpen(false); }} />
+          <SidebarItem icon={<Settings size={18} />} label="ERP Settings" active={activeTab === 'settings'} onClick={() => { setActiveTab('settings'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<ArrowUpRight size={18} />} label="Promotion Wizard" active={activeTab === 'promotion'} onClick={() => { setActiveTab('promotion'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<Landmark size={18} />} label="Finance" active={activeTab === 'finance'} onClick={() => { setActiveTab('finance'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<Upload size={18} />} label="Bulk Import Center" active={activeTab === 'import'} onClick={() => { setActiveTab('import'); setIsSidebarOpen(false); }} />
@@ -626,6 +640,74 @@ const AdminDashboard = () => {
                   </motion.div>
                 ))}
                 {facultyAssignments.length === 0 && <div className="glass-card" style={{ gridColumn: '1/-1', padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>No faculty assignments found.</div>}
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'settings' && (
+            <motion.div key="settings" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+              <div style={{ marginBottom: '32px' }}>
+                <h2>System Configuration</h2>
+                <p style={{ color: 'var(--text-muted)' }}>Configure global parameters for attendance, security, and GPS verification.</p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '24px' }}>
+                <div className="glass-card" style={{ padding: '32px' }}>
+                   <h3 style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}><Activity color="var(--accent-cyan)" /> Smart Attendance</h3>
+                   
+                   <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                         <div>
+                            <p style={{ fontWeight: '600' }}>GPS Verification</p>
+                            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Require students to be within classroom radius.</p>
+                         </div>
+                         <button onClick={() => handleUpdateSettings({ gps_enabled: !settings.gps_enabled })} className={settings.gps_enabled ? 'btn-primary' : 'btn-secondary'} style={{ padding: '8px 20px', fontSize: '12px' }}>{settings.gps_enabled ? 'ENABLED' : 'DISABLED'}</button>
+                      </div>
+
+                      <div>
+                         <p style={{ fontWeight: '600', marginBottom: '8px' }}>Attendance Radius (Meters)</p>
+                         <input type="range" min="10" max="200" step="10" value={settings.radius} onChange={e => handleUpdateSettings({ radius: parseInt(e.target.value) })} style={{ width: '100%', accentColor: 'var(--accent-cyan)' }} />
+                         <p style={{ textAlign: 'right', fontSize: '14px', color: 'var(--accent-cyan)', fontWeight: '700' }}>{settings.radius}m</p>
+                      </div>
+
+                      <div>
+                         <p style={{ fontWeight: '600', marginBottom: '8px' }}>Default Session Duration</p>
+                         <select className="input-field" value={settings.default_duration} onChange={e => handleUpdateSettings({ default_duration: parseInt(e.target.value) })}>
+                            <option value="30">30 Seconds</option>
+                            <option value="60">60 Seconds</option>
+                            <option value="90">90 Seconds</option>
+                            <option value="120">2 Minutes</option>
+                         </select>
+                      </div>
+
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                         <div>
+                            <p style={{ fontWeight: '600' }}>QR Code Support</p>
+                            <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Allow students to scan teacher's screen.</p>
+                         </div>
+                         <button onClick={() => handleUpdateSettings({ qr_enabled: !settings.qr_enabled })} className={settings.qr_enabled ? 'btn-primary' : 'btn-secondary'} style={{ padding: '8px 20px', fontSize: '12px' }}>{settings.qr_enabled ? 'ENABLED' : 'DISABLED'}</button>
+                      </div>
+                   </div>
+                </div>
+
+                <div className="glass-card" style={{ padding: '32px' }}>
+                   <h3 style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}><Shield color="var(--accent-purple)" /> Anti-Cheat & Security</h3>
+                   
+                   <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                      <div>
+                         <p style={{ fontWeight: '600', marginBottom: '8px' }}>Security Strictness</p>
+                         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
+                            {['low', 'medium', 'high'].map(lvl => (
+                              <button key={lvl} onClick={() => handleUpdateSettings({ security_level: lvl })} style={{ padding: '10px', borderRadius: '8px', border: '1px solid var(--glass-border)', background: settings.security_level === lvl ? 'var(--accent-purple)' : 'transparent', color: 'white', fontSize: '12px', cursor: 'pointer', textTransform: 'capitalize' }}>{lvl}</button>
+                            ))}
+                         </div>
+                      </div>
+
+                      <div style={{ padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid var(--glass-border)' }}>
+                         <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Note: 'High' security disables copy-paste, requires manual typing of the code, and enforces a strict 50m GPS radius regardless of local settings.</p>
+                      </div>
+                   </div>
+                </div>
               </div>
             </motion.div>
           )}
