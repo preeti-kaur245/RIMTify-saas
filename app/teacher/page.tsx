@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   CheckCircle, XCircle, Calendar, BookOpen, LogOut, 
   Search, Filter, History, Users, Save, Check, AlertCircle, 
-  ChevronRight, Clock, Edit2, FileText, Upload, Plus, X, Link as LinkIcon, Loader2, Trash2, Book, Trophy, DollarSign, Megaphone, Menu, Activity, UserCheck, UserX, BarChart, ChevronDown, Sparkles, LayoutDashboard, ArrowUpRight
+  ChevronRight, Clock, Edit2, FileText, Upload, Plus, X, Link as LinkIcon, Loader2, Trash2, Book, Trophy, DollarSign, Megaphone, Menu, Activity, UserCheck, UserX, BarChart, ChevronDown, Sparkles, LayoutDashboard, ArrowUpRight, Shield
 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -1139,9 +1139,6 @@ const TeacherDashboard = () => {
           </div>
         )}
       </AnimatePresence>
-    </div>
-  )
-}
 
       {showImportModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
@@ -1213,6 +1210,9 @@ const TeacherDashboard = () => {
           </motion.div>
         </div>
       )}
+    </div>
+  )
+}
 
 const AttendanceToggle = ({ status, onToggle }: { status: 'present' | 'absent' | null, onToggle: (val: 'present' | 'absent') => void }) => {
   return (
