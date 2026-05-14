@@ -21,6 +21,7 @@ const StudentDashboard = () => {
   const [absentToday, setAbsentToday] = useState(false)
   const [attendancePercentage, setAttendancePercentage] = useState(0)
   const [studentProfile, setStudentProfile] = useState<any>(null)
+  const [enrollment, setEnrollment] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isActionLoading, setIsActionLoading] = useState(false)
   const [attendanceCode, setAttendanceCode] = useState('')
@@ -55,9 +56,19 @@ const StudentDashboard = () => {
     const { data: l } = await supabase.from('book_loans').select('*, books(title, author)').eq('student_id', user.user.id)
     if (l) setLoans(l)
 
-    // Fetch Materials
-    const { data: m } = await supabase.from('materials').select('*').order('created_at', { ascending: false })
-    if (m) setMaterials(m)
+    // Fetch Enrollment (Section Mapping)
+    const { data: enrollData } = await supabase.from('student_enrollments')
+      .select('*, sections(*, semesters(*, programs(*)))')
+      .eq('student_id', user.user.id)
+      .maybeSingle()
+    
+    if (enrollData) {
+      setEnrollment(enrollData)
+      
+      // Fetch Materials (Only if enrolled)
+      const { data: m } = await supabase.from('materials').select('*').order('created_at', { ascending: false })
+      if (m) setMaterials(m)
+    }
 
     // Fetch Announcements
     const { data: a } = await supabase.from('announcements').select('*').in('target_role', ['all', 'student']).order('created_at', { ascending: false })
@@ -108,6 +119,13 @@ const StudentDashboard = () => {
 
       if (sErr || !session) {
         setJoinMessage({ text: 'Invalid or expired code.', type: 'error' })
+        setIsActionLoading(false)
+        return
+      }
+
+      // 1b. ENROLLMENT CHECK - MUST MATCH SECTION
+      if (!enrollment || enrollment.section_id !== session.sections.id) {
+        setJoinMessage({ text: 'You are not enrolled in this specific section/course.', type: 'error' })
         setIsActionLoading(false)
         return
       }
@@ -190,6 +208,13 @@ const StudentDashboard = () => {
         <AnimatePresence mode="wait">
           {activeTab === 'overview' && (
             <motion.div key="over" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+              {!enrollment && !loading && (
+                <div style={{ padding: '24px', background: 'rgba(239, 68, 68, 0.05)', border: '1px dashed var(--error)', borderRadius: '16px', marginBottom: '32px', textAlign: 'center' }}>
+                  <Shield size={32} color="var(--error)" style={{ marginBottom: '16px' }} />
+                  <h3 style={{ marginBottom: '8px' }}>Not Enrolled in Any Course</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '14px' }}>You haven't been assigned to a section or semester yet. Please contact the University Admin to get access to your subjects and attendance.</p>
+                </div>
+              )}
               {absentToday && (
                 <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.1)', borderLeft: '4px solid var(--error)', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '24px' }}>
                   <Bell color="var(--error)" />
