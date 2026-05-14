@@ -46,6 +46,7 @@ const AdminDashboard = () => {
   const [showAnnounceModal, setShowAnnounceModal] = useState(false)
   const [showPayrollModal, setShowPayrollModal] = useState(false)
   const [showPreview, setShowPreview] = useState(false)
+  const [showEnrollModal, setShowEnrollModal] = useState(false)
   const [previewData, setPreviewData] = useState<any[]>([])
 
   const [hierarchyForm, setHierarchyForm] = useState({ type: 'department', name: '', parent_id: '', code: '' })
@@ -273,6 +274,41 @@ const AdminDashboard = () => {
     setProcessing(false)
   }
 
+  const handleAddHierarchy = async () => {
+    setProcessing(true)
+    const { type, name, parent_id, code } = hierarchyForm
+    
+    try {
+      if (type === 'department') {
+        await supabase.from('departments').insert([{ name, code }])
+      } else if (type === 'program') {
+        await supabase.from('programs').insert([{ name, department_id: parent_id, duration_years: 4 }])
+      } else if (type === 'semester') {
+        await supabase.from('semesters').insert([{ term_number: parseInt(name), program_id: parent_id, academic_year: '2026-27' }])
+      } else if (type === 'section') {
+        await supabase.from('sections').insert([{ name, semester_id: parent_id }])
+      }
+      setShowHierarchyModal(false)
+      await fetchData()
+    } catch (e) {
+      alert('Error adding hierarchy entity')
+    }
+    setProcessing(false)
+  }
+
+  const handleManualEnroll = async () => {
+    setProcessing(true)
+    const { student_id, section_id } = enrollForm
+    if (student_id && section_id) {
+      await supabase.from('student_enrollments').upsert({ student_id, section_id })
+      setShowEnrollModal(false)
+      await fetchData()
+    }
+    setProcessing(false)
+  }
+
+  const [enrollForm, setEnrollForm] = useState({ student_id: '', section_id: '' })
+
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); }
   const handleMarkFeePaid = async (id: any) => { 
     setProcessing(true)
@@ -382,6 +418,7 @@ const AdminDashboard = () => {
             <motion.div key="users" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
               <div style={{ display: 'flex', gap: '16px', marginBottom: '24px' }}>
                 <div style={{ position: 'relative', flex: 1 }}><Search size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)' }} /><input className="input-field" style={{ paddingLeft: '48px' }} placeholder="Search users..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} /></div>
+                <button onClick={() => { setEnrollForm({ student_id: '', section_id: '' }); setShowEnrollModal(true); }} className="btn-secondary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><LinkIcon size={18} /> Manual Enroll</button>
                 <button onClick={() => { setImportType('student'); setShowImportModal(true); }} className="btn-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Upload size={18} /> Bulk Students</button>
               </div>
               <div className="glass-card">
@@ -481,13 +518,19 @@ const AdminDashboard = () => {
                    <div key={dept.id} className="glass-card" style={{ padding: '24px', borderTop: '4px solid var(--accent-cyan)' }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
                         <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Landmark size={20} color="var(--accent-cyan)" /> {dept.name}</h3>
-                        <span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: '4px' }}>{dept.code || 'DEPT'}</span>
+                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                          <span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: '4px' }}>{dept.code || 'DEPT'}</span>
+                          <button onClick={() => handleDelete('departments', dept.id)} style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer' }}><Trash2 size={14} /></button>
+                        </div>
                       </div>
                       
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
                         {programs.filter(p => p.department_id === dept.id).map(prog => (
                           <div key={prog.id} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
-                            <p style={{ fontWeight: '600', fontSize: '14px', color: 'var(--accent-purple)', marginBottom: '4px' }}>{prog.name}</p>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                              <p style={{ fontWeight: '600', fontSize: '14px', color: 'var(--accent-purple)' }}>{prog.name}</p>
+                              <button onClick={() => handleDelete('programs', prog.id)} style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer', padding: '0' }}><X size={12} /></button>
+                            </div>
                             <div style={{ display: 'flex', gap: '16px' }}>
                               <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{semesters.filter(s => s.program_id === prog.id).length} Semesters</span>
                               <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{sections.filter(sec => semesters.filter(s => s.program_id === prog.id).map(s => s.id).includes(sec.semester_id)).length} Sections</span>
@@ -671,6 +714,45 @@ const AdminDashboard = () => {
       </main>
 
       {/* Modals */}
+      {showHierarchyModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}><h3>Build Academic Structure</h3><button onClick={() => setShowHierarchyModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button></div>
+            
+            <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>Entity Type</label>
+            <select className="input-field" style={{ width: '100%', marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }} value={hierarchyForm.type} onChange={e => setHierarchyForm({...hierarchyForm, type: e.target.value})}>
+              <option value="department" style={{background: '#1a1a1a'}}>Department</option>
+              <option value="program" style={{background: '#1a1a1a'}}>Program/Degree</option>
+              <option value="semester" style={{background: '#1a1a1a'}}>Semester</option>
+              <option value="section" style={{background: '#1a1a1a'}}>Section</option>
+            </select>
+
+            {hierarchyForm.type !== 'department' && (
+              <>
+                <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>Parent Entity</label>
+                <select className="input-field" style={{ width: '100%', marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }} value={hierarchyForm.parent_id} onChange={e => setHierarchyForm({...hierarchyForm, parent_id: e.target.value})}>
+                  <option value="" style={{background: '#1a1a1a'}}>Select Parent...</option>
+                  {hierarchyForm.type === 'program' && departments.map(d => <option key={d.id} value={d.id} style={{background: '#1a1a1a'}}>{d.name}</option>)}
+                  {hierarchyForm.type === 'semester' && programs.map(p => <option key={p.id} value={p.id} style={{background: '#1a1a1a'}}>{p.name}</option>)}
+                  {hierarchyForm.type === 'section' && semesters.map(s => <option key={s.id} value={s.id} style={{background: '#1a1a1a'}}>Sem {s.term_number} ({programs.find(p => p.id === s.program_id)?.name})</option>)}
+                </select>
+              </>
+            )}
+
+            <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>
+              {hierarchyForm.type === 'semester' ? 'Semester Number (e.g. 1)' : 'Name / Title'}
+            </label>
+            <input className="input-field" placeholder={hierarchyForm.type === 'semester' ? '1' : 'e.g. Computer Science'} value={hierarchyForm.name} onChange={e => setHierarchyForm({...hierarchyForm, name: e.target.value})} style={{ marginBottom: '16px' }} />
+            
+            {hierarchyForm.type === 'department' && (
+              <input className="input-field" placeholder="Dept Code (e.g. CS)" value={hierarchyForm.code} onChange={e => setHierarchyForm({...hierarchyForm, code: e.target.value})} style={{ marginBottom: '24px' }} />
+            )}
+
+            <LoadingButton onClick={handleAddHierarchy} loading={processing} style={{ width: '100%' }}>Create Entity</LoadingButton>
+          </motion.div>
+        </div>
+      )}
+
       {showSubjectModal && (
         <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
           <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
@@ -714,6 +796,28 @@ const AdminDashboard = () => {
             </select>
 
             <LoadingButton onClick={handleAssignFaculty} loading={processing} style={{ width: '100%' }}>Finalize Assignment</LoadingButton>
+          </motion.div>
+        </div>
+      )}
+
+      {showEnrollModal && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', backdropFilter: 'blur(10px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000, padding: '20px' }}>
+          <motion.div initial={{ scale: 0.9 }} animate={{ scale: 1 }} className="glass-card" style={{ width: '100%', maxWidth: '400px', padding: '32px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}><h3>Manual Student Enrollment</h3><button onClick={() => setShowEnrollModal(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={20} /></button></div>
+            
+            <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>Select Student</label>
+            <select className="input-field" style={{ width: '100%', marginBottom: '16px', background: 'rgba(255,255,255,0.05)' }} value={enrollForm.student_id} onChange={e => setEnrollForm({...enrollForm, student_id: e.target.value})}>
+              <option value="" style={{background: '#1a1a1a'}}>Select Student...</option>
+              {users.filter(u => u.role === 'student').map(u => <option key={u.id} value={u.id} style={{background: '#1a1a1a'}}>{u.name} ({u.roll_no})</option>)}
+            </select>
+
+            <label style={{ fontSize: '12px', color: 'var(--text-muted)', marginBottom: '8px', display: 'block' }}>Assign to Section</label>
+            <select className="input-field" style={{ width: '100%', marginBottom: '24px', background: 'rgba(255,255,255,0.05)' }} value={enrollForm.section_id} onChange={e => setEnrollForm({...enrollForm, section_id: e.target.value})}>
+              <option value="" style={{background: '#1a1a1a'}}>Select Section...</option>
+              {sections.map(s => <option key={s.id} value={s.id} style={{background: '#1a1a1a'}}>{s.name} (Sem {semesters.find(sem => sem.id === s.semester_id)?.term_number})</option>)}
+            </select>
+
+            <LoadingButton onClick={handleManualEnroll} loading={processing} style={{ width: '100%' }}>Enroll Student</LoadingButton>
           </motion.div>
         </div>
       )}
