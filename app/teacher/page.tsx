@@ -1253,6 +1253,18 @@ const AttendanceToggle = ({ status, onToggle }: { status: 'present' | 'absent' |
   )
 }
 
+const StatCard = ({ label, value, icon, color }: any) => (
+  <motion.div whileHover={{ y: -5 }} className="glass-card" style={{ padding: '24px', borderLeft: `4px solid ${color}` }}>
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div>
+        <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontWeight: '600', marginBottom: '4px' }}>{label.toUpperCase()}</p>
+        <h3 style={{ fontSize: '28px', fontWeight: '800' }}>{value}</h3>
+      </div>
+      <div style={{ padding: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px' }}>{icon}</div>
+    </div>
+  </motion.div>
+)
+
 const SidebarItem = ({ icon, label, active, onClick }: any) => (
   <div onClick={onClick} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '14px 16px', borderRadius: '12px', cursor: 'pointer', marginBottom: '4px', background: active ? 'rgba(255, 255, 255, 0.05)' : 'transparent', color: active ? 'var(--text-primary)' : 'var(--text-secondary)', border: active ? '1px solid var(--glass-border)' : '1px solid transparent', transition: '0.2s' }}>{icon}<span style={{ fontWeight: active ? '600' : '400', fontSize: '14px' }}>{label}</span></div>
 )
