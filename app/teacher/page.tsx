@@ -26,6 +26,7 @@ const TeacherDashboard = () => {
   const [activeSession, setActiveSession] = useState<any>(null)
   const [timeLeft, setTimeLeft] = useState(0)
   const [showQR, setShowQR] = useState(false)
+  const [liveStudents, setLiveStudents] = useState<any[]>([])
   const [showImportModal, setShowImportModal] = useState(false)
   const [importPreview, setImportPreview] = useState<any[]>([])
   const [importErrors, setImportErrors] = useState<string[]>([])
@@ -160,6 +161,13 @@ const TeacherDashboard = () => {
     }
   }
 
+  useEffect(() => {
+    if (selectedClass) {
+      fetchStudents()
+      if (selectedSubject) fetchCourseStats(selectedSubject.name)
+    }
+  }, [selectedClass, selectedSubject])
+
   const fetchStudents = async () => {
     // If we have a selected section, fetch from student_enrollments. Otherwise fallback to old profiles fetch.
     if (selectedSection) {
@@ -230,7 +238,7 @@ const TeacherDashboard = () => {
         const c = counts[s.id] || { present: 0, total: 0 }
         const percentage = c.total === 0 ? 0 : Math.round((c.present / c.total) * 100)
         return { ...s, percentage, total: c.total }
-      }).filter(s => s.total > 0)
+      })
       
       statsArray.sort((a, b) => b.percentage - a.percentage)
       
@@ -392,6 +400,43 @@ const TeacherDashboard = () => {
       setTimeLeft(duration)
       setShowQR(true)
     }
+    setSaving(false)
+  }
+
+  // Real-time listener for Smart Attendance
+  useEffect(() => {
+    if (!activeSession) {
+      setLiveStudents([])
+      return
+    }
+
+    const channel = supabase
+      .channel('live-attendance')
+      .on('postgres_changes', { 
+        event: 'INSERT', 
+        schema: 'public', 
+        table: 'attendance', 
+        filter: `session_id=eq.${activeSession.id}` 
+      }, async (payload) => {
+        // Fetch student name for the live view
+        const { data: profile } = await supabase.from('profiles').select('name, roll_no').eq('id', payload.new.student_id).single()
+        if (profile) {
+          setLiveStudents(prev => [{ ...payload.new, profiles: profile }, ...prev])
+        }
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [activeSession])
+
+  const handleFinalizeSession = async () => {
+    if (!activeSession) return
+    setSaving(true)
+    await supabase.from('attendance_sessions').update({ is_active: false }).eq('id', activeSession.id)
+    setActiveSession(null)
+    setTimeLeft(0)
+    fetchStudents() // Refresh the main roster view
+    setMessage({ text: 'Attendance session finalized!', type: 'success' })
     setSaving(false)
   }
 
@@ -666,8 +711,8 @@ const TeacherDashboard = () => {
                           </div>
                         </div>
 
-                        <div style={{ display: 'flex', gap: '32px', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
-                           <div className="glass-card" style={{ padding: '24px 40px', background: 'rgba(0,0,0,0.3)', border: '2px solid var(--accent-purple)' }}>
+                        <div style={{ display: 'flex', gap: '32px', alignItems: 'flex-start', justifyContent: 'center', flexWrap: 'wrap' }}>
+                           <div className="glass-card" style={{ padding: '24px 40px', background: 'rgba(0,0,0,0.3)', border: '2px solid var(--accent-purple)', textAlign: 'center' }}>
                               <p style={{ fontSize: '12px', color: 'var(--accent-purple)', fontWeight: '800', letterSpacing: '2px', marginBottom: '8px' }}>ATTENDANCE CODE</p>
                               <h1 style={{ fontSize: '48px', letterSpacing: '8px', color: 'white' }} onPaste={(e) => e.preventDefault()}>{activeSession.code}</h1>
                            </div>
@@ -679,12 +724,47 @@ const TeacherDashboard = () => {
                            )}
                         </div>
 
-                        <div style={{ marginTop: '40px', display: 'flex', justifyContent: 'center', gap: '16px' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', borderRadius: '100px', fontSize: '12px' }}>
-                            <div className="status-dot-active" /> GPS VALIDATION ACTIVE
+                        {/* Live Student List */}
+                        <div style={{ marginTop: '40px', textAlign: 'left' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                            <div>
+                               <h4 style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}><Users size={18} color="var(--success)" /> Live Classroom Feed</h4>
+                               <p style={{ fontSize: '11px', color: 'var(--text-muted)', margin: 0 }}>Students marking attendance in real-time</p>
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                               <span style={{ fontSize: '20px', fontWeight: '800', color: 'var(--success)' }}>{liveStudents.length}</span>
+                               <div className="status-dot-active" />
+                            </div>
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--error)', borderRadius: '100px', fontSize: '12px' }}>
-                            <Shield size={14} /> ANTI-CHEAT ON
+                          
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: '12px', maxHeight: '250px', overflowY: 'auto', padding: '16px', background: 'rgba(0,0,0,0.2)', borderRadius: '16px', border: '1px solid var(--glass-border)' }}>
+                             <AnimatePresence>
+                               {liveStudents.map((s, i) => (
+                                 <motion.div 
+                                   initial={{ opacity: 0, scale: 0.8, y: 10 }} 
+                                   animate={{ opacity: 1, scale: 1, y: 0 }} 
+                                   exit={{ opacity: 0, scale: 0.8 }}
+                                   key={s.id} 
+                                   className="glass-card" 
+                                   style={{ padding: '12px', fontSize: '12px', display: 'flex', alignItems: 'center', gap: '10px', background: 'rgba(16, 185, 129, 0.05)', borderColor: 'rgba(16, 185, 129, 0.2)', position: 'relative', overflow: 'hidden' }}
+                                 >
+                                    <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'linear-gradient(135deg, var(--success), #059669)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold' }}>{s.profiles?.name?.charAt(0)}</div>
+                                    <div style={{ flex: 1, overflow: 'hidden' }}>
+                                       <div style={{ fontWeight: '600', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.profiles?.name}</div>
+                                       <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{s.profiles?.roll_no}</div>
+                                    </div>
+                                    <div style={{ position: 'absolute', bottom: 0, left: 0, height: '2px', background: 'var(--success)', width: '100%' }} />
+                                 </motion.div>
+                               ))}
+                             </AnimatePresence>
+                             {liveStudents.length === 0 && <div style={{ gridColumn: '1/-1', textAlign: 'center', color: 'var(--text-muted)', fontSize: '13px', padding: '40px' }}><Loader2 className="spin" style={{ marginBottom: '12px' }} /> Waiting for students to enter the code...</div>}
+                          </div>
+                        </div>
+
+                        <div style={{ marginTop: '40px', display: 'flex', justifyContent: 'center', gap: '16px' }}>
+                          <LoadingButton onClick={handleFinalizeSession} loading={saving} style={{ background: 'var(--success)', color: 'white', border: 'none' }}>Finalize & Save Attendance</LoadingButton>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 16px', background: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)', borderRadius: '100px', fontSize: '12px' }}>
+                             GPS ACTIVE
                           </div>
                         </div>
                       </div>

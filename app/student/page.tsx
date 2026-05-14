@@ -100,7 +100,7 @@ const StudentDashboard = () => {
     try {
       // 1. Fetch Session
       const { data: session, error: sErr } = await supabase.from('attendance_sessions')
-        .select('*, sections(*, semesters(*, programs(*)))')
+        .select('*, sections(*), allocation:section_subject_allocations(*, subjects(*))')
         .eq('code', attendanceCode.toUpperCase())
         .eq('is_active', true)
         .gt('expires_at', new Date().toISOString())
@@ -148,7 +148,8 @@ const StudentDashboard = () => {
         gps_status: gpsStatus,
         latitude: studentLat,
         longitude: studentLng,
-        section_id: session.sections.id
+        section_id: session.sections.id,
+        subject: session.allocation?.subjects?.name || 'Smart Attendance'
       }])
 
       if (aErr) {
