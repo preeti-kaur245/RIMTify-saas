@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   CheckCircle, XCircle, Calendar, BookOpen, LogOut, 
   Search, Filter, History, Users, Save, Check, AlertCircle, 
-  ChevronRight, Clock, Edit2, FileText, Upload, Plus, X, Link as LinkIcon, Loader2, Trash2, Book, Trophy, DollarSign, Megaphone, Menu, Activity, UserCheck, UserX, BarChart, ChevronDown, Sparkles
+  ChevronRight, Clock, Edit2, FileText, Upload, Plus, X, Link as LinkIcon, Loader2, Trash2, Book, Trophy, DollarSign, Megaphone, Menu, Activity, UserCheck, UserX, BarChart, ChevronDown, Sparkles, LayoutDashboard, ArrowUpRight
 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -13,7 +13,7 @@ import ScreenLoader from '@/components/ScreenLoader'
 import LoadingButton from '@/components/LoadingButton'
 
 const TeacherDashboard = () => {
-  const [activeTab, setActiveTab] = useState('attendance')
+  const [activeTab, setActiveTab] = useState('dashboard')
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
   const [selectedSession, setSelectedSession] = useState(1)
   const [selectedCourse, setSelectedCourse] = useState<any>(null)
@@ -383,6 +383,7 @@ const TeacherDashboard = () => {
           <button className="mobile-only" onClick={() => setIsSidebarOpen(false)} style={{ background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}><X size={24} /></button>
         </div>
         <nav style={{ flex: 1, overflowY: 'auto' }}>
+          <SidebarItem icon={<LayoutDashboard size={18} />} label="My Classes" active={activeTab === 'dashboard'} onClick={() => { setActiveTab('dashboard'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<CheckCircle size={18} />} label="Attendance" active={activeTab === 'attendance'} onClick={() => { setActiveTab('attendance'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<Book size={18} />} label="Materials" active={activeTab === 'materials'} onClick={() => { setActiveTab('materials'); setIsSidebarOpen(false); }} />
           <SidebarItem icon={<Megaphone size={18} />} label="Announce" active={activeTab === 'announce'} onClick={() => { setActiveTab('announce'); setIsSidebarOpen(false); }} />
@@ -398,6 +399,71 @@ const TeacherDashboard = () => {
         <AnimatePresence mode="wait">
           {!loading && (
             <div key="content">
+          {activeTab === 'dashboard' && (
+             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+                <div style={{ marginBottom: '40px' }}>
+                  <h1 style={{ fontSize: '32px', marginBottom: '8px' }}>Welcome, {teacherProfile?.name || 'Professor'}</h1>
+                  <p style={{ color: 'var(--text-muted)' }}>Here are your assigned classes for the current academic session.</p>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: '24px' }}>
+                  {teacherClasses.map((cls) => (
+                    <motion.div 
+                      key={cls.id} 
+                      whileHover={{ scale: 1.02, translateY: -5 }}
+                      onClick={() => {
+                        setSelectedClass(cls)
+                        setSelectedSubject(cls.subject)
+                        setSelectedSection(cls.section)
+                        setSelectedSemester(cls.semester)
+                        setActiveTab('attendance')
+                      }}
+                      className="glass-card" 
+                      style={{ padding: '32px', cursor: 'pointer', borderLeft: '6px solid var(--accent-cyan)', position: 'relative', overflow: 'hidden' }}
+                    >
+                      <div style={{ position: 'absolute', top: '-20px', right: '-20px', width: '100px', height: '100px', background: 'var(--accent-cyan)', opacity: 0.05, borderRadius: '50%' }} />
+                      
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '24px' }}>
+                        <div>
+                          <p style={{ fontSize: '11px', color: 'var(--accent-cyan)', fontWeight: '800', textTransform: 'uppercase', letterSpacing: '1px' }}>{cls.subject.code}</p>
+                          <h3 style={{ fontSize: '20px', marginTop: '4px' }}>{cls.subject.name}</h3>
+                        </div>
+                        <div style={{ padding: '12px', background: 'rgba(255,255,255,0.05)', borderRadius: '12px' }}>
+                          <Users size={20} color="var(--accent-cyan)" />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Program:</span>
+                          <span style={{ fontWeight: '600' }}>{cls.program.name}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Semester:</span>
+                          <span style={{ fontWeight: '600' }}>Semester {cls.semester.term_number}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>Section:</span>
+                          <span style={{ fontWeight: '600', padding: '2px 8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px' }}>Section {cls.section.name}</span>
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: '32px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent-cyan)', fontSize: '13px', fontWeight: '600' }}>
+                        Mark Attendance <ArrowUpRight size={16} />
+                      </div>
+                    </motion.div>
+                  ))}
+                  
+                  {teacherClasses.length === 0 && (
+                    <div className="glass-card" style={{ padding: '40px', textAlign: 'center', gridColumn: '1 / -1' }}>
+                      <AlertCircle size={48} color="var(--text-muted)" style={{ margin: '0 auto 16px' }} />
+                      <p style={{ color: 'var(--text-muted)' }}>You have not been assigned to any classes yet. Please contact Admin.</p>
+                    </div>
+                  )}
+                </div>
+             </motion.div>
+          )}
+
           {activeTab === 'attendance' && (
              <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
                 {/* Premium Sticky Top Header (Desktop & Mobile combined feel) */}

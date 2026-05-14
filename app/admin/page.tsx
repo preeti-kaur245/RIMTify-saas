@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { 
   Users, UserPlus, LogOut, LayoutDashboard, Settings, Shield, 
   BookOpen, CreditCard, Search, Trash2, Edit3, Filter, 
-  MoreVertical, Upload, FileText, Plus, X, Check, AlertTriangle, Book, Landmark, Bookmark, Bell, DollarSign, Megaphone, Loader2, TrendingUp, ArrowUpRight, Menu, Clock, Link as LinkIcon, AlertCircle
+  MoreVertical, Upload, FileText, Plus, X, Check, AlertTriangle, Book, Landmark, Bookmark, Bell, DollarSign, Megaphone, Loader2, TrendingUp, ArrowUpRight, Menu, Clock, Link as LinkIcon, AlertCircle, ChevronDown, ChevronRight
 } from 'lucide-react'
 import { createClient } from '@/utils/supabase/client'
 import { useRouter } from 'next/navigation'
@@ -60,6 +60,9 @@ const AdminDashboard = () => {
   const [feeForm, setFeeForm] = useState({ student_id: '', title: '', amount: '', due_date: '' })
   const [announceForm, setAnnounceForm] = useState({ title: '', message: '', type: 'general', target_role: 'all' })
   const [payrollForm, setPayrollForm] = useState({ teacher_id: '', month: 'May', year: 2026, base_salary: '', bonus: '0', deductions: '0' })
+  const [expandedNodes, setExpandedNodes] = useState<Record<string, boolean>>({})
+  
+  const toggleNode = (id: string) => setExpandedNodes(prev => ({ ...prev, [id]: !prev[id] }))
 
   const router = useRouter()
   const supabase = createClient()
@@ -307,6 +310,16 @@ const AdminDashboard = () => {
     setProcessing(false)
   }
 
+  const handleMoveStudent = async (studentId: string, oldSectionId: string, newSectionId: string) => {
+    setProcessing(true)
+    await supabase.from('student_enrollments')
+      .update({ section_id: newSectionId })
+      .eq('student_id', studentId)
+      .eq('section_id', oldSectionId)
+    await fetchData()
+    setProcessing(false)
+  }
+
   const [enrollForm, setEnrollForm] = useState({ student_id: '', section_id: '' })
 
   const handleLogout = async () => { await supabase.auth.signOut(); router.push('/login'); }
@@ -430,7 +443,12 @@ const AdminDashboard = () => {
                         <td style={{ padding: '16px 24px' }}>{u.name}</td>
                         <td style={{ padding: '16px 24px' }}>{u.role}</td>
                         <td style={{ padding: '16px 24px', color: 'var(--text-muted)' }}>{u.roll_no}</td>
-                        <td style={{ padding: '16px 24px' }}><button onClick={() => handleDelete('profiles', u.id)} style={{ color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={16} /></button></td>
+                        <td style={{ padding: '16px 24px' }}>
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            {u.role === 'student' && <button onClick={() => { setEnrollForm({ student_id: u.id, section_id: '' }); setShowEnrollModal(true); }} style={{ color: 'var(--accent-cyan)', background: 'none', border: 'none', cursor: 'pointer' }} title="Transfer Section"><ArrowUpRight size={16} /></button>}
+                            <button onClick={() => handleDelete('profiles', u.id)} style={{ color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer' }}><Trash2 size={16} /></button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -480,67 +498,147 @@ const AdminDashboard = () => {
                 <h2>Faculty Assignment Dashboard</h2>
                 <button onClick={() => setShowAssignModal(true)} className="btn-primary"><Plus size={18} /> Assign Faculty</button>
               </div>
-              <div className="responsive-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '20px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '24px' }}>
                 {facultyAssignments.map(fa => (
-                  <div key={fa.id} className="glass-card" style={{ padding: '24px', borderLeft: '4px solid var(--accent-purple)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
+                  <motion.div whileHover={{ y: -5 }} key={fa.id} className="glass-card" style={{ padding: '24px', borderLeft: '4px solid var(--accent-purple)', background: 'rgba(255,255,255,0.02)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
                       <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-                        <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Shield size={20} color="var(--accent-purple)" /></div>
-                        <div><h3 style={{ fontSize: '16px' }}>{fa.profiles?.name}</h3><p style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Faculty Member</p></div>
+                        <div style={{ width: '45px', height: '45px', borderRadius: '12px', background: 'rgba(168, 85, 247, 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid rgba(168, 85, 247, 0.2)' }}><Shield size={22} color="var(--accent-purple)" /></div>
+                        <div><h3 style={{ fontSize: '16px', fontWeight: '700' }}>{fa.profiles?.name}</h3><p style={{ fontSize: '11px', color: 'var(--accent-purple)', fontWeight: '600' }}>ASSIGNEE</p></div>
                       </div>
-                      <button onClick={() => handleDelete('faculty_assignments', fa.id)} style={{ color: 'var(--error)', background: 'none', border: 'none', cursor: 'pointer' }}><X size={16} /></button>
+                      <button onClick={() => handleDelete('faculty_assignments', fa.id)} style={{ color: 'var(--error)', background: 'rgba(239, 68, 68, 0.05)', border: 'none', padding: '8px', borderRadius: '8px', cursor: 'pointer' }}><Trash2 size={16} /></button>
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}><span style={{ color: 'var(--text-muted)' }}>Subject:</span><span>{fa.subjects?.name}</span></div>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}><span style={{ color: 'var(--text-muted)' }}>Section:</span><span>{fa.sections?.name}</span></div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', padding: '16px', background: 'rgba(255,255,255,0.02)', borderRadius: '12px' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}><span style={{ color: 'var(--text-muted)' }}>Subject</span><span style={{ fontWeight: '600' }}>{fa.subjects?.name}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}><span style={{ color: 'var(--text-muted)' }}>Section</span><span style={{ fontWeight: '600', color: 'var(--accent-cyan)' }}>Section {fa.sections?.name}</span></div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '13px' }}><span style={{ color: 'var(--text-muted)' }}>Assignment ID</span><span style={{ fontSize: '10px', color: 'var(--text-muted)' }}>#{fa.id.slice(0,8)}</span></div>
                     </div>
-                  </div>
+                  </motion.div>
                 ))}
+                {facultyAssignments.length === 0 && <div className="glass-card" style={{ gridColumn: '1/-1', padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>No faculty assignments found.</div>}
               </div>
             </motion.div>
           )}
 
           {activeTab === 'hierarchy' && (
             <motion.div key="hierarchy" initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '24px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '32px', alignItems: 'center' }}>
                  <div>
-                   <h2>Academic Structure Builder</h2>
-                   <p style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Manage the university organizational hierarchy.</p>
+                   <h2 style={{ fontSize: '28px' }}>Academic Tree View</h2>
+                   <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Expand departments to manage programs, semesters, and subject distributions.</p>
                  </div>
-                 <div style={{ display: 'flex', gap: '12px' }}>
-                   <button className="btn-secondary" onClick={() => setShowHierarchyModal(true)}><Plus size={16} /> Add Dept/Program</button>
-                   <button className="btn-primary" onClick={() => setShowHierarchyModal(true)}><Plus size={16} /> Build Structure</button>
-                 </div>
+                 <button className="btn-primary" onClick={() => setShowHierarchyModal(true)}><Plus size={18} /> Build New Branch</button>
               </div>
               
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '20px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                  {departments.map(dept => (
-                   <div key={dept.id} className="glass-card" style={{ padding: '24px', borderTop: '4px solid var(--accent-cyan)' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                        <h3 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Landmark size={20} color="var(--accent-cyan)" /> {dept.name}</h3>
-                        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                          <span style={{ fontSize: '10px', background: 'rgba(255,255,255,0.05)', padding: '4px 8px', borderRadius: '4px' }}>{dept.code || 'DEPT'}</span>
-                          <button onClick={() => handleDelete('departments', dept.id)} style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer' }}><Trash2 size={14} /></button>
+                   <div key={dept.id} className="glass-card" style={{ padding: '0', overflow: 'hidden' }}>
+                      {/* Dept Level */}
+                      <div 
+                        onClick={() => toggleNode(dept.id)}
+                        style={{ padding: '20px 24px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', background: 'rgba(255,255,255,0.02)' }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                          {expandedNodes[dept.id] ? <ChevronDown size={18} color="var(--accent-cyan)" /> : <ChevronRight size={18} color="var(--text-muted)" />}
+                          <Landmark size={20} color="var(--accent-cyan)" />
+                          <h3 style={{ fontSize: '18px' }}>{dept.name} <span style={{ color: 'var(--text-muted)', fontSize: '12px', marginLeft: '8px' }}>[{dept.code}]</span></h3>
+                        </div>
+                        <div style={{ display: 'flex', gap: '12px' }}>
+                           <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{programs.filter(p => p.department_id === dept.id).length} Programs</span>
+                           <button onClick={(e) => { e.stopPropagation(); handleDelete('departments', dept.id); }} style={{ color: 'var(--error)', background: 'none', border: 'none' }}><Trash2 size={16} /></button>
                         </div>
                       </div>
-                      
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                        {programs.filter(p => p.department_id === dept.id).map(prog => (
-                          <div key={prog.id} style={{ padding: '12px', background: 'rgba(255,255,255,0.02)', borderRadius: '8px', border: '1px solid var(--glass-border)' }}>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
-                              <p style={{ fontWeight: '600', fontSize: '14px', color: 'var(--accent-purple)' }}>{prog.name}</p>
-                              <button onClick={() => handleDelete('programs', prog.id)} style={{ background: 'none', border: 'none', color: 'var(--error)', cursor: 'pointer', padding: '0' }}><X size={12} /></button>
+
+                      <AnimatePresence>
+                        {expandedNodes[dept.id] && (
+                          <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} style={{ overflow: 'hidden', borderTop: '1px solid var(--glass-border)' }}>
+                            <div style={{ padding: '12px 24px 24px 48px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                               {programs.filter(p => p.department_id === dept.id).map(prog => (
+                                 <div key={prog.id} className="tree-node-program">
+                                    <div 
+                                      onClick={() => toggleNode(prog.id)}
+                                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', cursor: 'pointer' }}
+                                    >
+                                       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                         {expandedNodes[prog.id] ? <ChevronDown size={16} color="var(--accent-purple)" /> : <ChevronRight size={16} color="var(--text-muted)" />}
+                                         <BookOpen size={18} color="var(--accent-purple)" />
+                                         <span style={{ fontWeight: '600' }}>{prog.name}</span>
+                                       </div>
+                                       <button onClick={(e) => { e.stopPropagation(); handleDelete('programs', prog.id); }} style={{ color: 'var(--error)', background: 'none', border: 'none' }}><X size={14} /></button>
+                                    </div>
+
+                                    {expandedNodes[prog.id] && (
+                                      <div style={{ padding: '8px 0 8px 32px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                         {semesters.filter(s => s.program_id === prog.id).map(sem => (
+                                           <div key={sem.id}>
+                                              <div 
+                                                onClick={() => toggleNode(sem.id)}
+                                                style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px', cursor: 'pointer', fontSize: '14px' }}
+                                              >
+                                                {expandedNodes[sem.id] ? <ChevronDown size={14} color="var(--accent-magenta)" /> : <ChevronRight size={14} color="var(--text-muted)" />}
+                                                <Clock size={16} color="var(--accent-magenta)" />
+                                                Semester {sem.term_number}
+                                              </div>
+
+                                              {expandedNodes[sem.id] && (
+                                                <div style={{ padding: '4px 0 4px 24px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                                   {sections.filter(sec => sec.semester_id === sem.id).map(section => (
+                                                     <div key={section.id} className="glass-card" style={{ padding: '16px', background: 'rgba(255,255,255,0.01)' }}>
+                                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                                                          <h4 style={{ display: 'flex', alignItems: 'center', gap: '8px' }}><Users size={14} color="var(--success)" /> Section {section.name}</h4>
+                                                          <button onClick={() => toggleNode(section.id)} className="neon-text" style={{ fontSize: '11px', background: 'none', border: 'none', cursor: 'pointer' }}>
+                                                            {expandedNodes[section.id] ? 'Hide Subjects' : 'Manage Subjects'}
+                                                          </button>
+                                                        </div>
+
+                                                        {expandedNodes[section.id] && (
+                                                          <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--glass-border)' }}>
+                                                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                                                              <p style={{ fontSize: '11px', fontWeight: '800', color: 'var(--text-muted)' }}>SUBJECT ALLOCATION</p>
+                                                              <button onClick={() => { setAssignForm({ teacher_id: '', subject_id: '', section_id: section.id }); setShowAssignModal(true); }} style={{ fontSize: '11px', color: 'var(--accent-cyan)', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}><Plus size={12} /> Assign Subject</button>
+                                                            </div>
+                                                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '12px' }}>
+                                                              {subjectAllocations.filter(a => a.section_id === section.id).map(alloc => (
+                                                                <div key={alloc.id} style={{ padding: '10px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', fontSize: '12px', border: '1px solid var(--glass-border)' }}>
+                                                                  <p style={{ fontWeight: '600' }}>{alloc.subjects?.name}</p>
+                                                                  <p style={{ color: 'var(--text-muted)', fontSize: '10px' }}>{alloc.subjects?.code}</p>
+                                                                  <div style={{ marginTop: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                                    <span style={{ fontSize: '9px', color: 'var(--accent-magenta)' }}>{alloc.subjects?.type?.toUpperCase()}</span>
+                                                                    <button onClick={() => handleDelete('section_subject_allocations', alloc.id)} style={{ color: 'var(--error)', background: 'none', border: 'none' }}><X size={10} /></button>
+                                                                  </div>
+                                                                </div>
+                                                              ))}
+                                                              {subjectAllocations.filter(a => a.section_id === section.id).length === 0 && <p style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>No subjects allocated yet.</p>}
+                                                            </div>
+                                                          </div>
+                                                        )}
+                                                     </div>
+                                                   ))}
+                                                   <button onClick={() => { setHierarchyForm({ type: 'section', name: '', parent_id: sem.id, code: '' }); setShowHierarchyModal(true); }} style={{ fontSize: '12px', color: 'var(--text-muted)', border: '1px dashed var(--glass-border)', padding: '8px', borderRadius: '8px', textAlign: 'center', background: 'none', cursor: 'pointer' }}><Plus size={14} style={{ display: 'inline', marginRight: '4px' }} /> Add Section</button>
+                                                </div>
+                                              )}
+                                           </div>
+                                         ))}
+                                         <button onClick={() => { setHierarchyForm({ type: 'semester', name: '', parent_id: prog.id, code: '' }); setShowHierarchyModal(true); }} style={{ fontSize: '12px', color: 'var(--text-muted)', border: '1px dashed var(--glass-border)', padding: '8px', borderRadius: '8px', textAlign: 'center', background: 'none', cursor: 'pointer' }}><Plus size={14} style={{ display: 'inline', marginRight: '4px' }} /> Add Semester</button>
+                                      </div>
+                                    )}
+                                 </div>
+                               ))}
+                               <button onClick={() => { setHierarchyForm({ type: 'program', name: '', parent_id: dept.id, code: '' }); setShowHierarchyModal(true); }} style={{ fontSize: '14px', color: 'var(--accent-purple)', border: '1px dashed var(--accent-purple)', padding: '12px', borderRadius: '12px', textAlign: 'center', background: 'rgba(217, 70, 239, 0.05)', cursor: 'pointer' }}><Plus size={16} style={{ display: 'inline', marginRight: '4px' }} /> Create New Program in {dept.name}</button>
                             </div>
-                            <div style={{ display: 'flex', gap: '16px' }}>
-                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{semesters.filter(s => s.program_id === prog.id).length} Semesters</span>
-                              <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>{sections.filter(sec => semesters.filter(s => s.program_id === prog.id).map(s => s.id).includes(sec.semester_id)).length} Sections</span>
-                            </div>
-                          </div>
-                        ))}
-                        {programs.filter(p => p.department_id === dept.id).length === 0 && <p style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic' }}>No programs assigned</p>}
-                      </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                    </div>
                  ))}
+                 
+                 {departments.length === 0 && (
+                   <div className="glass-card" style={{ padding: '60px', textAlign: 'center' }}>
+                     <Landmark size={48} color="var(--text-muted)" style={{ margin: '0 auto 20px' }} />
+                     <p style={{ color: 'var(--text-muted)' }}>No departments defined. Start by creating your first department.</p>
+                     <button onClick={() => { setHierarchyForm({ type: 'department', name: '', parent_id: '', code: '' }); setShowHierarchyModal(true); }} className="btn-primary" style={{ marginTop: '20px' }}><Plus size={18} /> Add Department</button>
+                   </div>
+                 )}
               </div>
             </motion.div>
           )}
